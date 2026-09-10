@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,21 @@ def read_hdb_residential_csv(path: str | Path, limit: int | None = None) -> list
             if limit is not None and len(result) >= limit:
                 break
     return result
+
+
+def read_hdb_postals_by_block(path: str | Path) -> dict[str, tuple[str, ...]]:
+    """Read official HDB building postal candidates for exact OneMap fallback checks."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if payload.get("type") != "FeatureCollection":
+        raise ValueError("HDB Existing Building GeoJSON must be a FeatureCollection")
+    postals: dict[str, set[str]] = {}
+    for feature in payload.get("features", []):
+        properties = feature.get("properties", {})
+        block = normalize_address(properties.get("BLK_NO"))
+        postal = normalize_postal(properties.get("POSTAL_COD"))
+        if block and postal:
+            postals.setdefault(block, set()).add(postal)
+    return {block: tuple(sorted(values)) for block, values in postals.items()}
 
 
 _ROAD_WORDS = {

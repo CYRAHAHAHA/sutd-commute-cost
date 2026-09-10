@@ -7,6 +7,7 @@ from commute.addresses.hdb import (
     HDBResidentialCandidate,
     address_from_hdb_result,
     canonical_road,
+    read_hdb_postals_by_block,
     read_hdb_residential_csv,
 )
 from commute.db import get_address_resolution, init_addresses_db, save_address_resolution
@@ -72,3 +73,15 @@ def test_address_resolution_checkpoint_is_idempotent(tmp_path):
     assert row["postal_code"] == "189673"
     assert row["attempt_count"] == 2
     assert connection.execute("select count(*) from address_resolution").fetchone()[0] == 1
+
+
+def test_hdb_geojson_postal_candidates_are_grouped(tmp_path):
+    path = tmp_path / "buildings.geojson"
+    path.write_text(
+        '{"type":"FeatureCollection","features":['
+        '{"type":"Feature","properties":{"BLK_NO":"11","POSTAL_COD":"271011"}},'
+        '{"type":"Feature","properties":{"BLK_NO":"11","POSTAL_COD":"380011"}}'
+        ']}',
+        encoding="utf-8",
+    )
+    assert read_hdb_postals_by_block(path) == {"11": ("271011", "380011")}

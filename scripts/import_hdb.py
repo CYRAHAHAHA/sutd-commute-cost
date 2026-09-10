@@ -6,7 +6,12 @@ import time
 
 import httpx
 
-from commute.addresses.hdb import HDB_SOURCE, address_from_hdb_result, read_hdb_residential_csv
+from commute.addresses.hdb import (
+    HDB_SOURCE,
+    address_from_hdb_result,
+    read_hdb_postals_by_block,
+    read_hdb_residential_csv,
+)
 from commute.collector import ProviderError, RateLimiter, call_with_retries
 from commute.config import ConfigError, credential, load_config, load_environment, resolve_path
 from commute.db import (
@@ -26,6 +31,11 @@ def parser() -> argparse.ArgumentParser:
         "--property-csv",
         default="data/input/HDBPropertyInformation.csv",
         help="Downloaded HDB Property Information CSV",
+    )
+    result.add_argument(
+        "--existing-building-geojson",
+        default="data/input/HDBExistingBuilding.geojson",
+        help="Official HDB Existing Building GeoJSON used for postal fallback checks",
     )
     result.add_argument("--limit", type=int, help="Resolve at most this many residential source records")
     result.add_argument("--retry-failed", action="store_true", help="Retry previously terminally failed source records")
@@ -53,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigError("No residential HDB candidates were found in the source CSV")
         connection = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
         configured_rps = float(config["providers"]["ONEMAP"].get("requests_per_second", 1.0))
+        postal_candidates_by_block = read_hdb_postals_by_block(args.existing_building_geojson)
         cached_success = 0
         retryable_failures = 0
         pending = 0
@@ -123,6 +134,24 @@ def main(argv: list[str] | None = None) -> int:
                             break
                         except ValueError as exc:
                             last_error = exc
+                    if address is None:
+                        for postal in postal_candidates_by_block.get(candidate.block_number, ()):
+
+                            def request_postal():
+                                limiter.wait()
+                                stats["requests"] += 1
+                                return _search_with_retry(client, postal)
+
+                            result, variant_attempts = call_with_retries(request_postal, max_attempts)
+                            attempts += variant_attempts
+                            if not result:
+                                continue
+                            try:
+                                address = address_from_hdb_result(candidate, result)
+                                query_used = postal
+                                break
+                            except ValueError as exc:
+                                last_error = exc
                     if address is None:
                         raise last_error or ValueError(f"OneMap could not resolve {candidate.search_value}")
                     save_address_resolution(
