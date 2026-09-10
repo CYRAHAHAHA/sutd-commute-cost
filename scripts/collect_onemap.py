@@ -4,7 +4,15 @@ import argparse
 import sys
 
 from commute.collector import ProviderError
-from commute.config import ConfigError, credential, destination, load_config, load_environment, resolve_path
+from commute.config import (
+    ConfigError,
+    credential,
+    destination,
+    expected_samples,
+    load_config,
+    load_environment,
+    resolve_path,
+)
 from commute.db import init_addresses_db, init_observations_db, iter_addresses
 from commute.providers.onemap import OneMapClient
 from commute.runners import collect_onemap
@@ -40,7 +48,8 @@ def main(argv: list[str] | None = None) -> int:
         if not rows:
             print("No matching residential addresses found.", file=sys.stderr)
             return 1
-        print(f"ONEMAP workload: {len(rows):,} residential origins × 70 = {len(rows) * 70:,} route calls")
+        expected = expected_samples(config, "ONEMAP")
+        print(f"ONEMAP workload: {len(rows):,} residential origins × {expected} = {len(rows) * expected:,} route calls")
         if args.dry_run:
             return 0
         observation_connection = init_observations_db(resolve_path(config, config["observations_database"]))

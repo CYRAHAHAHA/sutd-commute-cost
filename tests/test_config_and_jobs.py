@@ -24,17 +24,19 @@ def test_fixed_experiment_has_ten_weekdays():
     ]
 
 
-def test_each_provider_defines_seven_timestamps():
+def test_provider_sampling_timestamps_are_explicit():
     from commute.config import load_config
 
     config = load_config()
-    assert [item[1] for item in query_datetimes(config, "GOOGLE")][:7] == [
+    assert [item[1] for item in query_datetimes(config, "GOOGLE")] == [
         "07:30",
-        "07:35",
-        "07:40",
         "07:45",
-        "07:50",
-        "07:55",
+        "08:00",
+        "07:30",
+        "07:45",
+        "08:00",
+        "07:30",
+        "07:45",
         "08:00",
     ]
     assert [item[1] for item in query_datetimes(config, "ONEMAP")][:7] == [
@@ -48,17 +50,23 @@ def test_each_provider_defines_seven_timestamps():
     ]
 
 
-def test_seven_times_times_ten_dates_make_70_jobs(test_config):
+def test_configured_provider_jobs_have_expected_cardinality(test_config):
     row = {"postal_code": "200640", "latitude": 1.3, "longitude": 103.85}
     original_dates = test_config["experiment"]["dates"]
+    original_google_dates = test_config["providers"]["GOOGLE"].get("dates")
+    original_onemap_dates = test_config["providers"]["ONEMAP"].get("dates")
     original_google = test_config["providers"]["GOOGLE"]["times"]
     original_one = test_config["providers"]["ONEMAP"]["times"]
     test_config["experiment"]["dates"] = [str(index) for index in range(10)]
+    test_config["providers"]["GOOGLE"]["dates"] = test_config["experiment"]["dates"]
+    test_config["providers"]["ONEMAP"]["dates"] = test_config["experiment"]["dates"]
     test_config["providers"]["GOOGLE"]["times"] = [str(index) for index in range(7)]
     test_config["providers"]["ONEMAP"]["times"] = [str(index) for index in range(7)]
     assert len(jobs_for_provider(test_config, "GOOGLE", [row])) == 70
     assert len(jobs_for_provider(test_config, "ONEMAP", [row])) == 70
     test_config["experiment"]["dates"] = original_dates
+    test_config["providers"]["GOOGLE"]["dates"] = original_google_dates
+    test_config["providers"]["ONEMAP"]["dates"] = original_onemap_dates
     test_config["providers"]["GOOGLE"]["times"] = original_google
     test_config["providers"]["ONEMAP"]["times"] = original_one
 

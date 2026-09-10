@@ -28,7 +28,9 @@ python -c "import sqlite3; c=sqlite3.connect('data/observations.sqlite'); print(
 
 ## Rate limits and costs
 
-Google transit matrices are batched, but every origin/arrival-time pair is still a billable route element according to the applicable Google pricing and quota plan. Never omit `--confirm-large-run` from the Google full-run guard. OneMap calls are deliberately paced at one request per second by default; change the configured rate only after checking your account's current quota.
+Google transit matrices are batched, but every origin/arrival-time pair is still a billable route element according to the applicable Google pricing and quota plan. The default validation sample is at most 1,000 origins × 9 arrival observations = 9,000 planned events. Never omit `--confirm-large-run` from the Google full-run guard. The collector also refuses to exceed `GOOGLE_MONTHLY_REQUEST_BUDGET` unless `--override-budget` is explicit. OneMap calls are deliberately paced at one request per second by default; change the configured rate only after checking your account's current quota.
+
+The default 9,000-event budget leaves 1,000 events below Google's currently listed 10,000-event free usage cap for Compute Routes Essentials and Compute Route Matrix Essentials. Check Google's [current pricing and billing page](https://developers.google.com/maps/billing-and-pricing/pricing) before a production run. A local SQLite usage ledger records every matrix element reserved before an HTTP attempt, including retries, so a restart cannot silently reset the safety count.
 
 Retries use exponential backoff for transport errors, HTTP 408/425/429/5xx, and provider-declared transient errors. HTTP 429 is classified separately. Permanent invalid requests, authorization failures, not-found routes, and malformed responses become terminal `FAILED` observations instead of being retried forever.
 

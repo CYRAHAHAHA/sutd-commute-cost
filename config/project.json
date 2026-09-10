@@ -19,12 +19,17 @@
       "2026-09-24",
       "2026-09-25"
     ],
-    "minimum_successful_samples": 60
+    "minimum_successful_samples": 60,
+    "minimum_successful_samples_by_provider": {
+      "GOOGLE": 8,
+      "ONEMAP": 60
+    }
   },
   "providers": {
     "GOOGLE": {
+      "dates": ["2026-09-14", "2026-09-16", "2026-09-18"],
       "time_semantics": "ARRIVAL",
-      "times": ["07:30", "07:35", "07:40", "07:45", "07:50", "07:55", "08:00"],
+      "times": ["07:30", "07:45", "08:00"],
       "travel_mode": "TRANSIT",
       "batch_size": 90,
       "requests_per_second": 1.0,
@@ -40,6 +45,13 @@
       "requests_per_second": 1.0,
       "max_attempts": 5
     }
+  },
+  "google_sampling": {
+    "exclusion_radius_km": 3.5,
+    "sample_size": 1000,
+    "monthly_request_budget": 9000,
+    "sampling_seed": 20260910,
+    "stratum_cell_degrees": 0.02
   },
   "addresses": {
     "database": "data/residential_addresses.sqlite",

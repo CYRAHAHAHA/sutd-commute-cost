@@ -14,6 +14,10 @@ type PostcodeSummary = {
   postal_code: string;
   latitude: number;
   longitude: number;
+  distance_to_sutd_km: number | null;
+  google_exclusion_reason: string | null;
+  google_stratum: string | null;
+  google_sample_selected: boolean;
   google: ProviderSummary;
   onemap: ProviderSummary;
   combined: { status: string; mean_seconds: number | null };
@@ -22,7 +26,7 @@ type PostcodeSummary = {
 type Summary = {
   dataset_version: string;
   generated_at: string;
-  minimum_successful_samples: number;
+  minimum_successful_samples: Record<string, number>;
   postcodes: Record<string, PostcodeSummary>;
 };
 
@@ -32,8 +36,9 @@ type Methodology = {
   timezone: string;
   collection_dates: string[];
   destination: { name: string; latitude: number | null; longitude: number | null };
-  minimum_successful_samples: number;
-  providers: Record<string, { time_semantics: string; times: string[]; expected_samples: number; travel_mode: string }>;
+  minimum_successful_samples: Record<string, number>;
+  google_sampling: { exclusion_radius_km: number; sample_size: number; monthly_request_budget: number; sampling_seed: number; stratum_cell_degrees: number };
+  providers: Record<string, { time_semantics: string; times: string[]; dates: string[]; expected_samples: number; travel_mode: string }>;
 };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -46,6 +51,7 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("en-SG", { day: "n
 function providerDetails(name: string, summary: ProviderSummary, methodology: Methodology): string {
   const spec = methodology.providers[name];
   const range = summary.min_seconds === null ? "—" : `${detailMinutes(summary.min_seconds)} – ${detailMinutes(summary.max_seconds)}`;
+  const exclusion = summary.status === "EXCLUDED" ? `<p class="warning">Google validation excludes this postcode because it is within the configured ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km SUTD radius.</p>` : "";
   return `
     <div class="provider-detail">
       <div class="detail-heading"><span>${name === "GOOGLE" ? "Google Maps" : "OneMap"}</span><span>${summary.successful_samples} / ${summary.expected_samples} successful</span></div>
@@ -55,6 +61,7 @@ function providerDetails(name: string, summary: ProviderSummary, methodology: Me
         <span>Range</span><strong>${range}</strong>
       </div>
       <p>${name === "GOOGLE" ? "Arrive by" : "Leave home at"} ${spec.times[0]}–${spec.times.at(-1)} Singapore time, in five-minute steps.</p>
+      ${exclusion}
     </div>`;
 }
 
@@ -63,7 +70,7 @@ function renderResult(record: PostcodeSummary, methodology: Methodology): string
   const oneWay = hasCombined ? Math.round((record.combined.mean_seconds as number) / 60) : null;
   return `
     <section class="result-card" aria-live="polite">
-      <div class="result-kicker">${hasCombined ? "Your estimate" : "Not enough observations yet"}</div>
+      <div class="result-kicker">${hasCombined ? "Your estimate" : record.google_exclusion_reason ? "OneMap coverage only" : "Not enough observations yet"}</div>
       <div class="big-number">${minutes(record.combined.mean_seconds)}</div>
       <div class="result-label">Average weekday-morning<br />public-transport commute to SUTD</div>
       <div class="breakdown">
@@ -71,7 +78,7 @@ function renderResult(record: PostcodeSummary, methodology: Methodology): string
         <div><span>OneMap</span><strong>${minutes(record.onemap.mean_seconds)}</strong></div>
         <div class="combined-row"><span>Combined</span><strong>${minutes(record.combined.mean_seconds)}</strong></div>
       </div>
-      ${hasCombined ? `<p class="extrapolation">≈ ${oneWay! * 2} minutes commuting per school day<br /><span>≈ ${((oneWay! * 2 * 5) / 60).toFixed(1)} hours over a 5-day week</span><small>Simple round-trip extrapolation, not another route calculation.</small></p>` : `<p class="warning">This postcode is known, but both provider estimates need at least ${methodology.minimum_successful_samples} of ${record.google.expected_samples} successful samples before a combined estimate is shown.</p>`}
+      ${hasCombined ? `<p class="extrapolation">≈ ${oneWay! * 2} minutes commuting per school day<br /><span>≈ ${((oneWay! * 2 * 5) / 60).toFixed(1)} hours over a 5-day week</span><small>Simple round-trip extrapolation, not another route calculation.</small></p>` : record.google_exclusion_reason ? `<p class="warning">Google validation is intentionally excluded within ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km of SUTD. OneMap remains the coverage layer for this postcode.</p>` : `<p class="warning">This postcode is known, but both provider estimates need at least ${methodology.minimum_successful_samples.GOOGLE} Google and ${methodology.minimum_successful_samples.ONEMAP} OneMap successful samples before a combined estimate is shown.</p>`}
       <details class="methodology-detail">
         <summary>How was this calculated?</summary>
         ${providerDetails("GOOGLE", record.google, methodology)}
@@ -91,11 +98,11 @@ function renderMethodology(methodology: Methodology): string {
       <h2>Transparent by design.</h2>
       <p>Every result is generated ahead of time. The website never calls a routing API and collects no visitor data.</p>
       <div class="methodology-columns">
-        <div><h3>Google Maps</h3><p><strong>Arrive-by methodology.</strong> Seven arrival targets from ${google.times[0]} to ${google.times.at(-1)} at five-minute intervals, across ${methodology.collection_dates.length} weekdays. ${google.expected_samples} expected observations per postcode.</p></div>
-        <div><h3>OneMap</h3><p><strong>Departure-time methodology.</strong> Seven departure times from ${onemap.times[0]} to ${onemap.times.at(-1)} at five-minute intervals, across the same weekdays. ${onemap.expected_samples} expected observations per postcode.</p></div>
+        <div><h3>Google Maps</h3><p><strong>Validation layer.</strong> Three arrival targets from ${google.times[0]} to ${google.times.at(-1)} at fifteen-minute intervals, across ${google.dates.length} weekdays. ${google.expected_samples} expected observations per sampled postcode. Origins within ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km of SUTD are retained but excluded from Google.</p></div>
+        <div><h3>OneMap</h3><p><strong>Coverage layer.</strong> Seven departure times from ${onemap.times[0]} to ${onemap.times.at(-1)} at five-minute intervals, across ${onemap.dates.length} weekdays. ${onemap.expected_samples} expected observations per postcode.</p></div>
       </div>
       <p class="dates">Collection dates: ${methodology.collection_dates.map(formatDate).join(" · ")}</p>
-      <p class="fine-print">All times are Singapore Time (${methodology.timezone}). Minimum coverage: ${methodology.minimum_successful_samples} / 70 per provider. Dataset ${methodology.dataset_version}.</p>
+      <p class="fine-print">All times are Singapore Time (${methodology.timezone}). Minimum coverage: ${methodology.minimum_successful_samples.GOOGLE} / ${google.expected_samples} Google; ${methodology.minimum_successful_samples.ONEMAP} / ${onemap.expected_samples} OneMap. Dataset ${methodology.dataset_version}.</p>
     </section>`;
 }
 

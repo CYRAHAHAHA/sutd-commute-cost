@@ -3,10 +3,16 @@ from __future__ import annotations
 import csv
 import sqlite3
 from collections.abc import Iterable, Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .models import Address, Observation
+
+
+def now_utc() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 ADDRESS_SCHEMA = """
 CREATE TABLE IF NOT EXISTS residential_address (
@@ -18,7 +24,12 @@ CREATE TABLE IF NOT EXISTS residential_address (
     source TEXT NOT NULL,
     source_identifier TEXT NOT NULL,
     confidence TEXT NOT NULL CHECK (confidence IN ('VERIFIED', 'LIKELY', 'UNRESOLVED', 'EXCLUDED')),
-    discovered_at TEXT NOT NULL
+    discovered_at TEXT NOT NULL,
+    distance_to_sutd_km REAL,
+    google_exclusion_reason TEXT,
+    google_stratum TEXT,
+    google_sample_selected INTEGER NOT NULL DEFAULT 0,
+    google_sample_seed INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_residential_confidence ON residential_address(confidence);
 """
@@ -47,6 +58,11 @@ CREATE TABLE IF NOT EXISTS commute_observation (
 CREATE INDEX IF NOT EXISTS idx_observation_lookup
   ON commute_observation(postal_code, provider, service_date, query_time);
 CREATE INDEX IF NOT EXISTS idx_observation_status ON commute_observation(provider, status);
+CREATE TABLE IF NOT EXISTS google_usage_ledger (
+    id INTEGER PRIMARY KEY,
+    recorded_at TEXT NOT NULL,
+    event_count INTEGER NOT NULL CHECK (event_count > 0)
+);
 """
 
 
@@ -62,6 +78,17 @@ def connect(path: str | Path) -> sqlite3.Connection:
 def init_addresses_db(path: str | Path) -> sqlite3.Connection:
     connection = connect(path)
     connection.executescript(ADDRESS_SCHEMA)
+    existing_columns = {row[1] for row in connection.execute("PRAGMA table_info(residential_address)")}
+    migrations = {
+        "distance_to_sutd_km": "REAL",
+        "google_exclusion_reason": "TEXT",
+        "google_stratum": "TEXT",
+        "google_sample_selected": "INTEGER NOT NULL DEFAULT 0",
+        "google_sample_seed": "INTEGER",
+    }
+    for column, definition in migrations.items():
+        if column not in existing_columns:
+            connection.execute(f"ALTER TABLE residential_address ADD COLUMN {column} {definition}")
     connection.commit()
     return connection
 
@@ -69,6 +96,15 @@ def init_addresses_db(path: str | Path) -> sqlite3.Connection:
 def init_observations_db(path: str | Path) -> sqlite3.Connection:
     connection = connect(path)
     connection.executescript(OBSERVATION_SCHEMA)
+    if connection.execute("SELECT COUNT(*) FROM google_usage_ledger").fetchone()[0] == 0:
+        legacy_usage = connection.execute(
+            "SELECT COALESCE(SUM(attempt_count), 0) FROM commute_observation WHERE provider='GOOGLE'"
+        ).fetchone()[0]
+        if legacy_usage:
+            connection.execute(
+                "INSERT INTO google_usage_ledger (recorded_at, event_count) VALUES (?, ?)",
+                (now_utc(), int(legacy_usage)),
+            )
     connection.commit()
     return connection
 
@@ -132,6 +168,49 @@ def count_addresses(connection: sqlite3.Connection, include_confidence: Iterable
             f"SELECT COUNT(*) FROM residential_address WHERE confidence IN ({placeholders})", allowed
         ).fetchone()[0]
     )
+
+
+def update_google_population(
+    connection: sqlite3.Connection,
+    postal_code: str,
+    distance_to_sutd_km: float,
+    exclusion_reason: str | None,
+    stratum: str,
+    sample_selected: bool,
+    sample_seed: int,
+) -> None:
+    connection.execute(
+        """
+        UPDATE residential_address
+        SET distance_to_sutd_km=?, google_exclusion_reason=?, google_stratum=?,
+            google_sample_selected=?, google_sample_seed=?
+        WHERE postal_code=?
+        """,
+        (
+            distance_to_sutd_km,
+            exclusion_reason,
+            stratum,
+            int(sample_selected),
+            sample_seed,
+            postal_code,
+        ),
+    )
+
+
+def google_usage_events(connection: sqlite3.Connection) -> int:
+    """Count persisted Google matrix elements reserved before each HTTP attempt."""
+    value = connection.execute("SELECT COALESCE(SUM(event_count), 0) FROM google_usage_ledger").fetchone()[0]
+    return int(value)
+
+
+def record_google_usage(connection: sqlite3.Connection, event_count: int) -> None:
+    if event_count < 1:
+        raise ValueError("Google usage event count must be positive")
+    connection.execute(
+        "INSERT INTO google_usage_ledger (recorded_at, event_count) VALUES (?, ?)",
+        (now_utc(), event_count),
+    )
+    connection.commit()
 
 
 def get_observation(
@@ -228,6 +307,11 @@ def export_addresses_csv(connection: sqlite3.Connection, path: str | Path) -> No
                 "source_identifier",
                 "confidence",
                 "discovered_at",
+                "distance_to_sutd_km",
+                "google_exclusion_reason",
+                "google_stratum",
+                "google_sample_selected",
+                "google_sample_seed",
             ]
         )
         writer.writerows(rows)

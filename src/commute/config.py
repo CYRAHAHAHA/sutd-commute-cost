@@ -22,6 +22,15 @@ class Destination:
     longitude: float | None
 
 
+@dataclass(frozen=True)
+class GoogleSamplingSettings:
+    exclusion_radius_km: float
+    sample_size: int
+    monthly_request_budget: int
+    sampling_seed: int
+    stratum_cell_degrees: float
+
+
 def project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -40,7 +49,15 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
 
 
 def validate_config(config: dict[str, Any]) -> None:
-    required = ("timezone", "destination", "experiment", "providers", "addresses", "observations_database")
+    required = (
+        "timezone",
+        "destination",
+        "experiment",
+        "providers",
+        "google_sampling",
+        "addresses",
+        "observations_database",
+    )
     missing = [key for key in required if key not in config]
     if missing:
         raise ConfigError(f"Missing configuration keys: {', '.join(missing)}")
@@ -48,28 +65,43 @@ def validate_config(config: dict[str, Any]) -> None:
         ZoneInfo(config["timezone"])
     except Exception as exc:
         raise ConfigError(f"Unknown timezone: {config['timezone']}") from exc
-    dates = config["experiment"].get("dates", [])
-    if len(dates) != 10:
-        raise ConfigError(f"The experiment must contain exactly 10 dates; found {len(dates)}")
-    for value in dates:
+    experiment_dates = config["experiment"].get("dates", [])
+    if len(experiment_dates) != 10:
+        raise ConfigError(f"The experiment must contain exactly 10 dates; found {len(experiment_dates)}")
+    for value in experiment_dates:
         try:
             datetime.strptime(value, "%Y-%m-%d")
         except ValueError as exc:
             raise ConfigError(f"Experiment date is not YYYY-MM-DD: {value}") from exc
     for provider in ("GOOGLE", "ONEMAP"):
         spec = config["providers"].get(provider)
-        if not spec or len(spec.get("times", [])) != 7:
-            raise ConfigError(f"Provider {provider} must define exactly seven query times")
+        if not spec or not spec.get("times"):
+            raise ConfigError(f"Provider {provider} must define at least one query time")
         if spec.get("time_semantics") not in {"ARRIVAL", "DEPARTURE"}:
             raise ConfigError(f"Provider {provider} has invalid time semantics")
+        provider_dates = spec.get("dates", experiment_dates)
+        if not provider_dates or any(value not in experiment_dates for value in provider_dates):
+            raise ConfigError(f"Provider {provider} dates must be a non-empty subset of experiment.dates")
         for value in spec["times"]:
             try:
                 time.fromisoformat(value)
             except ValueError as exc:
                 raise ConfigError(f"Invalid query time for {provider}: {value}") from exc
-    threshold = config["experiment"].get("minimum_successful_samples")
-    if not isinstance(threshold, int) or not 0 < threshold <= 70:
-        raise ConfigError("experiment.minimum_successful_samples must be an integer from 1 to 70")
+    thresholds = config["experiment"].get("minimum_successful_samples_by_provider", {})
+    for provider in ("GOOGLE", "ONEMAP"):
+        expected = len(config["providers"][provider].get("dates", experiment_dates)) * len(
+            config["providers"][provider]["times"]
+        )
+        threshold = thresholds.get(provider, config["experiment"].get("minimum_successful_samples"))
+        if not isinstance(threshold, int) or not 0 < threshold <= expected:
+            raise ConfigError(f"minimum successful samples for {provider} must be an integer from 1 to {expected}")
+    sampling = config["google_sampling"]
+    if float(sampling.get("exclusion_radius_km", 0)) < 0:
+        raise ConfigError("google_sampling.exclusion_radius_km cannot be negative")
+    if int(sampling.get("sample_size", 0)) < 1:
+        raise ConfigError("google_sampling.sample_size must be positive")
+    if int(sampling.get("monthly_request_budget", 0)) < 1:
+        raise ConfigError("google_sampling.monthly_request_budget must be positive")
 
 
 def destination(config: dict[str, Any], require_coordinates: bool = False) -> Destination:
@@ -91,11 +123,32 @@ def dates(config: dict[str, Any]) -> list[str]:
     return list(config["experiment"]["dates"])
 
 
+def expected_samples(config: dict[str, Any], provider: str) -> int:
+    spec = config["providers"][provider]
+    return len(spec.get("dates", dates(config))) * len(spec["times"])
+
+
+def minimum_successful_samples(config: dict[str, Any], provider: str) -> int:
+    thresholds = config["experiment"].get("minimum_successful_samples_by_provider", {})
+    return int(thresholds.get(provider, config["experiment"]["minimum_successful_samples"]))
+
+
+def google_sampling_settings(config: dict[str, Any]) -> GoogleSamplingSettings:
+    raw = config["google_sampling"]
+    return GoogleSamplingSettings(
+        exclusion_radius_km=float(os.getenv("SUTD_EXCLUSION_RADIUS_KM", raw["exclusion_radius_km"])),
+        sample_size=int(os.getenv("GOOGLE_SAMPLE_SIZE", raw["sample_size"])),
+        monthly_request_budget=int(os.getenv("GOOGLE_MONTHLY_REQUEST_BUDGET", raw["monthly_request_budget"])),
+        sampling_seed=int(os.getenv("GOOGLE_SAMPLING_SEED", raw["sampling_seed"])),
+        stratum_cell_degrees=float(raw.get("stratum_cell_degrees", 0.02)),
+    )
+
+
 def query_datetimes(config: dict[str, Any], provider: str) -> list[tuple[str, str, datetime]]:
     zone = ZoneInfo(config["timezone"])
     spec = config["providers"][provider]
     result = []
-    for service_date in dates(config):
+    for service_date in spec.get("dates", dates(config)):
         for query_time in spec["times"]:
             local = datetime.fromisoformat(f"{service_date}T{query_time}:00").replace(tzinfo=zone)
             result.append((service_date, query_time, local))

@@ -3,8 +3,14 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from commute.aggregation.summary import aggregate_rows
-from commute.config import load_config, resolve_path
+from commute.aggregation.summary import aggregate_rows, validation_metrics
+from commute.config import (
+    expected_samples,
+    load_config,
+    load_environment,
+    minimum_successful_samples,
+    resolve_path,
+)
 from commute.db import init_addresses_db, init_observations_db, iter_addresses, iter_observations
 
 
@@ -16,19 +22,23 @@ def build_summary(config: dict) -> dict:
     rows = aggregate_rows(
         addresses,
         observations,
-        int(config["experiment"]["minimum_successful_samples"]),
-        expected_samples=70,
+        {provider: minimum_successful_samples(config, provider) for provider in ("GOOGLE", "ONEMAP")},
+        expected_samples={provider: expected_samples(config, provider) for provider in ("GOOGLE", "ONEMAP")},
     )
     return {
         "dataset_version": config.get("dataset_version"),
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "minimum_successful_samples": config["experiment"]["minimum_successful_samples"],
+        "minimum_successful_samples": {
+            provider: minimum_successful_samples(config, provider) for provider in ("GOOGLE", "ONEMAP")
+        },
+        "validation": validation_metrics(rows),
         "postcodes": rows,
     }
 
 
 def main() -> int:
     config = load_config()
+    load_environment()
     result = build_summary(config)
     path = resolve_path(config, "data/summary.json")
     path.parent.mkdir(parents=True, exist_ok=True)

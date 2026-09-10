@@ -1,12 +1,26 @@
 {
   "dataset_version": "2026.09.10",
-  "generated_at": "2026-09-10T11:31:36.071109Z",
-  "minimum_successful_samples": 60,
+  "generated_at": "2026-09-10T12:24:37.524557Z",
+  "minimum_successful_samples": {
+    "GOOGLE": 8,
+    "ONEMAP": 60
+  },
+  "validation": {
+    "overlap_count": 0,
+    "mean_difference_seconds": null,
+    "median_difference_seconds": null,
+    "mae_seconds": null,
+    "correlation": null
+  },
   "postcodes": {
     "200640": {
       "postal_code": "200640",
       "latitude": 1.30743547948389,
       "longitude": 103.854713903431,
+      "distance_to_sutd_km": null,
+      "google_exclusion_reason": null,
+      "google_stratum": null,
+      "google_sample_selected": false,
       "google": {
         "status": "INSUFFICIENT_DATA",
         "mean_seconds": null,
@@ -17,7 +31,7 @@
         "p10_seconds": null,
         "p90_seconds": null,
         "successful_samples": 0,
-        "expected_samples": 70
+        "expected_samples": 9
       },
       "onemap": {
         "status": "INSUFFICIENT_DATA",
@@ -40,6 +54,10 @@
       "postal_code": "460123",
       "latitude": 1.3271,
       "longitude": 103.9322,
+      "distance_to_sutd_km": null,
+      "google_exclusion_reason": null,
+      "google_stratum": null,
+      "google_sample_selected": false,
       "google": {
         "status": "INSUFFICIENT_DATA",
         "mean_seconds": null,
@@ -50,7 +68,7 @@
         "p10_seconds": null,
         "p90_seconds": null,
         "successful_samples": 0,
-        "expected_samples": 70
+        "expected_samples": 9
       },
       "onemap": {
         "status": "INSUFFICIENT_DATA",
@@ -73,6 +91,10 @@
       "postal_code": "560123",
       "latitude": 1.3718,
       "longitude": 103.8468,
+      "distance_to_sutd_km": null,
+      "google_exclusion_reason": null,
+      "google_stratum": null,
+      "google_sample_selected": false,
       "google": {
         "status": "INSUFFICIENT_DATA",
         "mean_seconds": null,
@@ -83,7 +105,7 @@
         "p10_seconds": null,
         "p90_seconds": null,
         "successful_samples": 0,
-        "expected_samples": 70
+        "expected_samples": 9
       },
       "onemap": {
         "status": "INSUFFICIENT_DATA",

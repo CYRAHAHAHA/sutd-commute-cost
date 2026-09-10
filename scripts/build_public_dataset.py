@@ -4,12 +4,20 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from commute.config import load_config, resolve_path
+from commute.config import (
+    expected_samples,
+    google_sampling_settings,
+    load_config,
+    load_environment,
+    minimum_successful_samples,
+    resolve_path,
+)
 from scripts.build_summary import build_summary
 
 
 def build_public_dataset(config: dict) -> tuple[Path, Path]:
     summary = build_summary(config)
+    sampling = google_sampling_settings(config)
     website_data = resolve_path(config, "website/data")
     website_data.mkdir(parents=True, exist_ok=True)
     public_path = website_data / "commute-summary.json"
@@ -20,12 +28,22 @@ def build_public_dataset(config: dict) -> tuple[Path, Path]:
         "timezone": config["timezone"],
         "collection_dates": config["experiment"]["dates"],
         "destination": config["destination"],
-        "minimum_successful_samples": config["experiment"]["minimum_successful_samples"],
+        "minimum_successful_samples": {
+            provider: minimum_successful_samples(config, provider) for provider in ("GOOGLE", "ONEMAP")
+        },
+        "google_sampling": {
+            "exclusion_radius_km": sampling.exclusion_radius_km,
+            "sample_size": sampling.sample_size,
+            "monthly_request_budget": sampling.monthly_request_budget,
+            "sampling_seed": sampling.sampling_seed,
+            "stratum_cell_degrees": sampling.stratum_cell_degrees,
+        },
         "providers": {
             provider: {
                 "time_semantics": spec["time_semantics"],
                 "times": spec["times"],
-                "expected_samples": len(config["experiment"]["dates"]) * len(spec["times"]),
+                "dates": spec.get("dates", config["experiment"]["dates"]),
+                "expected_samples": expected_samples(config, provider),
                 "travel_mode": spec.get("travel_mode", spec.get("mode")),
             }
             for provider, spec in config["providers"].items()
@@ -47,6 +65,7 @@ def build_public_dataset(config: dict) -> tuple[Path, Path]:
 
 def main() -> int:
     config = load_config()
+    load_environment()
     paths = build_public_dataset(config)
     print("Wrote:")
     for path in paths:

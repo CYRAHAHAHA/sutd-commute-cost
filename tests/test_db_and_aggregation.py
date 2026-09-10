@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from commute.aggregation.summary import aggregate_rows, combined_summary, summarize_provider
+from commute.aggregation.summary import (
+    aggregate_rows,
+    combined_summary,
+    summarize_provider,
+    validation_metrics,
+)
 from commute.db import get_observation, init_observations_db, save_observation
 from commute.models import Observation
 
@@ -63,3 +68,20 @@ def test_aggregate_rows_keeps_missing_provider_as_insufficient():
     result = aggregate_rows(addresses, observations, minimum_successful=1)
     assert result["200640"]["google"]["mean_seconds"] is None
     assert result["200640"]["combined"]["status"] == "INSUFFICIENT_DATA"
+
+
+def test_validation_metrics_compare_only_overlapping_provider_estimates():
+    rows = {
+        "200640": {
+            "google": {"status": "SUCCESS", "mean_seconds": 900},
+            "onemap": {"status": "SUCCESS", "mean_seconds": 780},
+        },
+        "460123": {
+            "google": {"status": "SUCCESS", "mean_seconds": 1200},
+            "onemap": {"status": "INSUFFICIENT_DATA", "mean_seconds": None},
+        },
+    }
+    metrics = validation_metrics(rows)
+    assert metrics["overlap_count"] == 1
+    assert metrics["mean_difference_seconds"] == 120
+    assert metrics["mae_seconds"] == 120

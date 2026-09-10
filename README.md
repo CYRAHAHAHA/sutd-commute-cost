@@ -12,9 +12,12 @@ The repository is fully implemented and tested, with a three-row residential fix
 
 The experiment definition is version-controlled in `config/project.json`.
 
-- Google Maps: public transit, **arrive by** seven targets from 07:30 through 08:00 at five-minute intervals, across the ten weekdays 14–25 September 2026. That is 70 expected observations per postcode. Origins are batched into Google Routes API Compute Route Matrix requests, within the documented 100-element transit matrix limit.
-- OneMap: public transport, **leave at** seven times from 06:20 through 06:50 at five-minute intervals, across the same ten weekdays. That is 70 expected observations per postcode.
-- Provider averages use successful durations only. A provider needs at least 60 of 70 successful samples by default. The combined estimate is `(Google mean + OneMap mean) / 2`, and is produced only when both provider estimates meet the threshold.
+- OneMap is the coverage layer: public transport, **leave at** seven times from 06:20 through 06:50 at five-minute intervals, across all ten weekdays 14–25 September 2026. That is 70 expected observations per eligible postcode.
+- Google Maps is the validation layer: public transit, **arrive by** 07:30, 07:45, and 08:00 on the first experiment week's Monday/Wednesday/Friday (14, 16, and 18 September 2026). That is 9 expected observations per sampled postcode.
+- The Google 9-observation design intentionally uses the first week's Monday/Wednesday/Friday; changing the configured Google date list automatically changes expected observations and budget calculations.
+- Residential origins within the configurable 3.5 km straight-line SUTD radius remain in the dataset but are marked `google_exclusion_reason=within_3.5km_of_sutd` and excluded from Google validation.
+- Google samples up to 1,000 remaining origins using reproducible proportional geographic strata and a fixed seed: 1,000 × 9 = 9,000 planned billable events. A hard budget guard blocks additional Google events beyond the configured 9,000 unless `--override-budget` is explicit. Google currently lists a 10,000-event free usage cap for Compute Routes Essentials and Compute Route Matrix Essentials; verify the [current pricing page](https://developers.google.com/maps/billing-and-pricing/pricing) before each monthly run.
+- Provider averages use successful durations only. A provider needs at least 8 / 9 Google or 60 / 70 OneMap successful samples. The combined estimate is `(Google mean + OneMap mean) / 2`, and is produced only when both provider estimates meet the threshold.
 
 These are intentionally different experiments. Google and OneMap use different routing systems and different time-query capabilities; the site shows both estimates instead of hiding disagreement.
 
@@ -40,6 +43,15 @@ Edit `config/project.json`:
 ```
 
 The two coordinates are the only project-specific product setting. Every provider receives exactly these coordinates.
+
+Google sampling controls are versioned in `config/project.json` and may be overridden locally in `.env`:
+
+```dotenv
+SUTD_EXCLUSION_RADIUS_KM=3.5
+GOOGLE_SAMPLE_SIZE=1000
+GOOGLE_MONTHLY_REQUEST_BUDGET=9000
+GOOGLE_SAMPLING_SEED=20260910
+```
 
 For route collection, set:
 
@@ -70,7 +82,7 @@ The source adapter preserves provenance and deduplicates by six-digit postal cod
 
 ## Safe collection commands
 
-The repository refuses an unscoped collection. `--limit` means residential origins, not observations; each origin has 70 jobs per provider.
+The repository refuses an unscoped collection. For OneMap, `--limit` caps origins. For Google, `--limit` caps the reproducibly selected validation sample; the full eligible population is still used to allocate geographic strata. OneMap has 70 jobs per origin; Google has 9.
 
 ```powershell
 # Show workload; no API calls
@@ -85,12 +97,15 @@ uv run python -m scripts.collect_google --limit 10
 uv run python -m scripts.collect_onemap --postal-code 200640
 uv run python -m scripts.collect_google --postal-code 200640
 
-# Full runs. Google requires the explicit cost guard.
+# Full runs. OneMap covers all eligible origins. Google selects at most 1,000.
 uv run python -m scripts.collect_onemap --all
 uv run python -m scripts.collect_google --all --confirm-large-run
+
+# Only with an explicit decision to exceed the configured 9,000-event guard
+uv run python -m scripts.collect_google --all --confirm-large-run --override-budget
 ```
 
-Google prints residential origins × 70 and an estimated matrix request count before starting. Successful and terminally failed observations are written immediately to SQLite. Restarting skips existing successes; failed rows can be retried. Ctrl+C is handled without discarding completed work.
+Google prints the full population, radius exclusions, eligible count, selected count, planned route elements, matrix HTTP requests, and current budget usage before starting. Successful and terminally failed observations are written immediately to SQLite. Restarting skips existing successes; failed rows can be retried. Ctrl+C is handled without discarding completed work.
 
 ## Build summaries and site
 

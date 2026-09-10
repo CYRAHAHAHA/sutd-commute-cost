@@ -31,6 +31,28 @@ class ProviderError(Exception):
         )
 
 
+class GoogleBudgetExceeded(ProviderError):
+    def __init__(self, used: int, requested: int, limit: int):
+        super().__init__(
+            f"Google budget guard: {used} used + {requested} requested exceeds configured limit {limit}; "
+            "use --override-budget only if you explicitly accept additional usage",
+            error_code="GOOGLE_BUDGET_EXCEEDED",
+            retryable=False,
+        )
+
+
+class GoogleBudget:
+    def __init__(self, limit: int, used: int, override: bool = False):
+        self.limit = limit
+        self.used = used
+        self.override = override
+
+    def reserve(self, elements: int) -> None:
+        if not self.override and self.used + elements > self.limit:
+            raise GoogleBudgetExceeded(self.used, elements, self.limit)
+        self.used += elements
+
+
 class RateLimiter:
     def __init__(self, requests_per_second: float) -> None:
         self.interval = 1.0 / requests_per_second if requests_per_second > 0 else 0
@@ -50,9 +72,10 @@ def now_utc() -> str:
 
 def jobs_for_provider(config: dict[str, Any], provider: str, rows: Iterable[Any]) -> list[Job]:
     spec = config["providers"][provider]
+    service_dates = spec.get("dates", config["experiment"]["dates"])
     jobs: list[Job] = []
     for row in rows:
-        for service_date in config["experiment"]["dates"]:
+        for service_date in service_dates:
             for query_time in spec["times"]:
                 jobs.append(
                     Job(

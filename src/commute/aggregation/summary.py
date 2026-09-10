@@ -6,6 +6,13 @@ from collections import defaultdict
 from typing import Any
 
 
+def row_value(row: Any, key: str, default: Any = None) -> Any:
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 def percentile(values: list[int], fraction: float) -> float | None:
     if not values:
         return None
@@ -46,8 +53,39 @@ def combined_summary(google: dict[str, Any], onemap: dict[str, Any]) -> dict[str
     return {"status": "SUCCESS" if usable else "INSUFFICIENT_DATA", "mean_seconds": value}
 
 
+def validation_metrics(rows: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Compare provider means only at overlapping, sufficiently covered origins."""
+    overlaps = [
+        row for row in rows.values() if row["google"]["status"] == "SUCCESS" and row["onemap"]["status"] == "SUCCESS"
+    ]
+    differences = [row["google"]["mean_seconds"] - row["onemap"]["mean_seconds"] for row in overlaps]
+    if not differences:
+        return {
+            "overlap_count": 0,
+            "mean_difference_seconds": None,
+            "median_difference_seconds": None,
+            "mae_seconds": None,
+            "correlation": None,
+        }
+    google_values = [row["google"]["mean_seconds"] for row in overlaps]
+    onemap_values = [row["onemap"]["mean_seconds"] for row in overlaps]
+    correlation = None
+    if len(differences) > 1 and len(set(google_values)) > 1 and len(set(onemap_values)) > 1:
+        correlation = round(statistics.correlation(google_values, onemap_values), 5)
+    return {
+        "overlap_count": len(overlaps),
+        "mean_difference_seconds": round(statistics.mean(differences), 3),
+        "median_difference_seconds": round(statistics.median(differences), 3),
+        "mae_seconds": round(statistics.mean(abs(value) for value in differences), 3),
+        "correlation": correlation,
+    }
+
+
 def aggregate_rows(
-    address_rows: list[Any], observation_rows: list[Any], minimum_successful: int, expected_samples: int = 70
+    address_rows: list[Any],
+    observation_rows: list[Any],
+    minimum_successful: int | dict[str, int],
+    expected_samples: int | dict[str, int] = 70,
 ) -> dict[str, dict[str, Any]]:
     grouped: dict[tuple[str, str], list[Any]] = defaultdict(list)
     for row in observation_rows:
@@ -55,12 +93,35 @@ def aggregate_rows(
     result: dict[str, dict[str, Any]] = {}
     for address in address_rows:
         postal = address["postal_code"]
-        google = summarize_provider(grouped[(postal, "GOOGLE")], expected_samples, minimum_successful)
-        onemap = summarize_provider(grouped[(postal, "ONEMAP")], expected_samples, minimum_successful)
+        google_expected = expected_samples["GOOGLE"] if isinstance(expected_samples, dict) else expected_samples
+        onemap_expected = expected_samples["ONEMAP"] if isinstance(expected_samples, dict) else expected_samples
+        google_minimum = minimum_successful["GOOGLE"] if isinstance(minimum_successful, dict) else minimum_successful
+        onemap_minimum = minimum_successful["ONEMAP"] if isinstance(minimum_successful, dict) else minimum_successful
+        exclusion_reason = row_value(address, "google_exclusion_reason")
+        if exclusion_reason:
+            google = {
+                "status": "EXCLUDED",
+                "mean_seconds": None,
+                "median_seconds": None,
+                "min_seconds": None,
+                "max_seconds": None,
+                "stddev_seconds": None,
+                "p10_seconds": None,
+                "p90_seconds": None,
+                "successful_samples": 0,
+                "expected_samples": google_expected,
+            }
+        else:
+            google = summarize_provider(grouped[(postal, "GOOGLE")], google_expected, google_minimum)
+        onemap = summarize_provider(grouped[(postal, "ONEMAP")], onemap_expected, onemap_minimum)
         result[postal] = {
             "postal_code": postal,
             "latitude": address["latitude"],
             "longitude": address["longitude"],
+            "distance_to_sutd_km": row_value(address, "distance_to_sutd_km"),
+            "google_exclusion_reason": exclusion_reason,
+            "google_stratum": row_value(address, "google_stratum"),
+            "google_sample_selected": bool(row_value(address, "google_sample_selected", 0)),
             "google": google,
             "onemap": onemap,
             "combined": combined_summary(google, onemap),

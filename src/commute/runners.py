@@ -6,6 +6,9 @@ from collections.abc import Callable
 from typing import Any
 
 from .collector import (
+    GoogleBudget,
+    GoogleBudgetExceeded,
+    ProviderError,
     RateLimiter,
     call_with_retries,
     is_success,
@@ -13,8 +16,8 @@ from .collector import (
     observation_from_job,
     save_failure,
 )
-from .config import as_utc_rfc3339, query_datetimes
-from .db import save_observation
+from .config import as_utc_rfc3339, expected_samples, google_sampling_settings, query_datetimes
+from .db import google_usage_events, record_google_usage, save_observation
 from .models import Job
 from .providers.google import GoogleRoutesClient, MatrixResult
 from .providers.onemap import OneMapClient
@@ -39,13 +42,20 @@ def collect_google(
     client: GoogleRoutesClient,
     logger: Callable[[str], None] = print,
     sleep: Callable[[float], None] | None = None,
+    budget_override: bool = False,
 ) -> dict[str, int]:
     spec = config["providers"]["GOOGLE"]
     destination = (float(config["destination"]["latitude"]), float(config["destination"]["longitude"]))
     limiter = RateLimiter(float(spec.get("requests_per_second", 1.0)))
     batch_size = min(99, int(spec.get("batch_size", 90)))
-    expected_total = len(rows) * len(config["experiment"]["dates"]) * len(spec["times"])
+    expected_per_origin = expected_samples(config, "GOOGLE")
+    expected_total = len(rows) * expected_per_origin
+    settings = google_sampling_settings(config)
+    budget = GoogleBudget(settings.monthly_request_budget, google_usage_events(connection), budget_override)
     stats = {"success": 0, "failed": 0, "skipped": 0, "requests": 0}
+    pending_total = pending_google_events(rows, config, connection)
+    if not budget_override and budget.used + pending_total > budget.limit:
+        raise GoogleBudgetExceeded(budget.used, pending_total, budget.limit)
     for service_date, query_time, local_dt in query_datetimes(config, "GOOGLE"):
         pending = [
             row for row in rows if not is_success(connection, row["postal_code"], "GOOGLE", service_date, query_time)
@@ -54,22 +64,28 @@ def collect_google(
         for start in range(0, len(pending), batch_size):
             batch = pending[start : start + batch_size]
             jobs = [_job(row, "GOOGLE", service_date, query_time, config) for row in batch]
-            limiter.wait()
-            stats["requests"] += 1
             attempts = 0
             try:
-                result, attempts = call_with_retries(
-                    lambda: client.compute_route_matrix(
+
+                def request_matrix():
+                    limiter.wait()
+                    budget.reserve(len(jobs))
+                    record_google_usage(connection, len(jobs))
+                    stats["requests"] += 1
+                    return client.compute_route_matrix(
                         [(job.origin_lat, job.origin_lng) for job in jobs],
                         destination,
                         as_utc_rfc3339(local_dt),
-                    ),
+                    )
+
+                result, attempts = call_with_retries(
+                    request_matrix,
                     int(spec.get("max_attempts", 5)),
                     sleep=sleep or time_module.sleep,
                 )
+            except GoogleBudgetExceeded:
+                raise
             except Exception as exc:
-                from .collector import ProviderError
-
                 provider_error = exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
                 for job in jobs:
                     save_failure(connection, job, config, attempts or int(spec.get("max_attempts", 5)), provider_error)
@@ -101,9 +117,19 @@ def collect_google(
             completed = stats["success"] + stats["failed"] + stats["skipped"]
             logger(
                 f"GOOGLE {completed:,} / {expected_total:,} observations; "
-                f"{stats['success']:,} success, {stats['failed']:,} failed; requests {stats['requests']:,}"
+                f"{stats['success']:,} success, {stats['failed']:,} failed; "
+                f"matrix requests {stats['requests']:,}; budget used {budget.used:,}"
             )
     return stats
+
+
+def pending_google_events(rows: list[Any], config: dict[str, Any], connection: Any) -> int:
+    return sum(
+        1
+        for service_date, query_time, _ in query_datetimes(config, "GOOGLE")
+        for row in rows
+        if not is_success(connection, row["postal_code"], "GOOGLE", service_date, query_time)
+    )
 
 
 def collect_onemap(
@@ -147,8 +173,6 @@ def collect_onemap(
                 )
                 stats["success"] += 1
             except Exception as exc:
-                from .collector import ProviderError
-
                 provider_error = exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
                 save_failure(connection, job, config, attempts or int(spec.get("max_attempts", 5)), provider_error)
                 stats["failed"] += 1
@@ -164,4 +188,4 @@ def collect_onemap(
 
 def estimate_google_requests(origin_count: int, config: dict[str, Any]) -> int:
     batch_size = min(99, int(config["providers"]["GOOGLE"].get("batch_size", 90)))
-    return math.ceil(origin_count / batch_size) * 70 if origin_count else 0
+    return math.ceil(origin_count / batch_size) * expected_samples(config, "GOOGLE") if origin_count else 0
