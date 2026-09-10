@@ -19,8 +19,9 @@ def audit_provider(
     jobs = jobs_for_provider(config, provider, population)
     expected_keys = {(job.postal_code, job.service_date, job.query_time) for job in jobs}
     observation_rows = list(observations)
-    actual_keys = {(row["postal_code"], row["service_date"], row["query_time"]) for row in observation_rows}
-    duplicate_keys = [key for key, count in Counter(actual_keys).items() if count > 1]
+    actual_key_list = [(row["postal_code"], row["service_date"], row["query_time"]) for row in observation_rows]
+    actual_keys = set(actual_key_list)
+    duplicate_keys = [key for key, count in Counter(actual_key_list).items() if count > 1]
     destination = config["destination"]
     expected_semantics = config["providers"][provider]["time_semantics"]
     invariant_errors: list[str] = []

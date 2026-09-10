@@ -62,3 +62,14 @@ def test_observation_audit_reports_missing_and_invalid_rows():
     assert result["missing_jobs"] == 1
     assert result["selection_ready"] is False
     assert result["invariant_errors"]
+
+
+def test_observation_audit_detects_duplicate_keys():
+    result = audit_provider(
+        audit_config(),
+        "GOOGLE",
+        [{"postal_code": "200640", "latitude": 1.3, "longitude": 103.85}],
+        [observation(), observation()],
+        minimum_population=1,
+    )
+    assert result["duplicate_keys"] == 1

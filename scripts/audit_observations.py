@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
                 f"{provider}: population {result['population']:,}; "
                 f"jobs {result['persisted_jobs']:,}/{result['expected_jobs']:,}; "
                 f"missing {result['missing_jobs']:,}; extra {result['unexpected_jobs']:,}; "
-                f"invariants {len(result['invariant_errors']):,}"
+                f"duplicates {result['duplicate_keys']:,}; invariants {len(result['invariant_errors']):,}"
             )
             if not result["selection_ready"]:
                 print(
