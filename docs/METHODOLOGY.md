@@ -69,7 +69,3 @@ The public dataset contains postcode summaries, Google inclusion/exclusion metad
 ## Unmapped and live lookup boundary
 
 The static site can recognize retained landed-home postcodes, but it does not call OneMap or Google from browser JavaScript by default. A live fallback requires a server-side proxy with its own authentication, rate limiting, abuse protection, and provider-terms review. Until that proxy is separately deployed, an excluded landed record is shown as known-but-unmapped rather than being presented as a zero-minute or fabricated result.
-
-## Unmapped and live lookup boundary
-
-The static site can recognize retained landed-home postcodes, but it does not call OneMap or Google from browser JavaScript. A live fallback would require a server-side proxy with its own authentication, rate limiting, abuse protection, and provider-terms review. Until that proxy is separately deployed, an excluded landed record is shown as known-but-unmapped rather than being presented as a zero-minute or fabricated result.
