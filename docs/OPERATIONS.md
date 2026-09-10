@@ -52,6 +52,14 @@ uv run python -m scripts.collect_onemap --all --date 2026-09-18
 
 The `--date` option only narrows the run to dates already configured for OneMap. It does not substitute dates. Successful rows are skipped on later runs; failed or missing rows remain eligible for retry.
 
+After each date-scoped run, audit the persisted rows before proceeding:
+
+```powershell
+uv run python -m scripts.audit_observations --provider ONEMAP
+```
+
+The audit checks the exact configured job keys, time semantics, destination coordinates, status/duration invariants, attempt counts, and collection metadata. Run it with `--require-complete` only after all configured dates for that provider have been collected. Extra rows from retained smoke tests are reported but do not replace missing production jobs.
+
 ## Duration estimates
 
 Let `N` be the number of default-eligible residential origins (`VERIFIED` and `LIKELY`) after import, and let `S` be the number of eligible origins remaining after the Google radius exclusion. The exact nationwide runtime cannot be known until that database exists.

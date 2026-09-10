@@ -142,6 +142,10 @@ uv run python -m scripts.collect_google --all --confirm-large-run
 # Repeat for 2026-09-16 and 2026-09-18 later; these are not substitute dates.
 uv run python -m scripts.collect_onemap --all --date 2026-09-14
 
+# Audit persisted rows after each date; add --require-complete for the final gate
+uv run python -m scripts.audit_observations --provider ONEMAP
+uv run python -m scripts.audit_observations --provider ONEMAP --require-complete
+
 # After the 9-event local Google smoke test, stay under the configured 9,000-event guard:
 uv run python -m scripts.collect_google --all --limit 999 --confirm-large-run
 
