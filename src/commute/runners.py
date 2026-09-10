@@ -178,14 +178,25 @@ def collect_onemap(
                     retryable=False,
                 )
             limiter.wait()
-            return client.route(
-                (job.origin_lat, job.origin_lng),
-                destination,
-                job.service_date,
-                job.query_time,
-                int(spec.get("max_walk_distance", 1000)),
-                int(spec.get("num_itineraries", 1)),
-            )
+            try:
+                return client.route(
+                    (job.origin_lat, job.origin_lng),
+                    destination,
+                    job.service_date,
+                    job.query_time,
+                    int(spec.get("max_walk_distance", 1000)),
+                    int(spec.get("num_itineraries", 1)),
+                )
+            except ProviderError:
+                raise
+            except Exception as exc:
+                # httpx transport/read timeouts and similar network failures do not
+                # carry ProviderError metadata, but must still use bounded retries.
+                raise ProviderError(
+                    f"OneMap transport error: {exc}",
+                    error_code="TRANSPORT_ERROR",
+                    retryable=True,
+                ) from exc
 
         try:
             duration, attempts = call_with_retries(

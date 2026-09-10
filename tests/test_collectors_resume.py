@@ -26,6 +26,17 @@ class FakeOneMap:
         return 720
 
 
+class FlakyOneMap:
+    def __init__(self):
+        self.calls = 0
+
+    def route(self, *args, **kwargs):
+        self.calls += 1
+        if self.calls < 3:
+            raise TimeoutError("temporary network timeout")
+        return 720
+
+
 class ExpiredOneMap:
     def route(self, *args, **kwargs):
         raise ProviderError("token expired", http_status=401, error_code="AUTHENTICATION_FAILED")
@@ -48,6 +59,15 @@ def test_onemap_collector_persists_a_success(test_config, tmp_path):
     stats = collect_onemap(rows, test_config, connection, client, sleep=lambda _: None)
     assert stats["success"] == 1
     assert connection.execute("select duration_seconds from commute_observation").fetchone()[0] == 720
+
+
+def test_onemap_collector_retries_transport_errors(test_config, tmp_path):
+    rows = [{"postal_code": "200640", "latitude": 1.3, "longitude": 103.85}]
+    connection = init_observations_db(tmp_path / "obs.sqlite")
+    client = FlakyOneMap()
+    stats = collect_onemap(rows, test_config, connection, client, sleep=lambda _: None)
+    assert stats["success"] == 1 and client.calls == 3
+    assert connection.execute("select attempt_count from commute_observation").fetchone()[0] == 3
 
 
 def test_onemap_authentication_failure_stops_without_mass_failure_rows(test_config, tmp_path):
