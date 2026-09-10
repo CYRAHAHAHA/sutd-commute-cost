@@ -16,6 +16,6 @@ OneMap Search is available as an optional coordinate resolver for rows without u
 
 ## Routing providers
 
-The Google client calls `https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix` server-side with `X-Goog-Api-Key` and a narrow response field mask. The OneMap client authenticates against `/api/auth/post/getToken`, then calls `/api/public/routingsvc/route` with an `Authorization` token header.
+The Google client calls `https://routes.googleapis.com/distanceMatrix/v2:computeRouteMatrix` server-side with `X-Goog-Api-Key` and a narrow response field mask. The OneMap client uses `ONEMAP_ACCESS_TOKEN` directly when provided; otherwise it can authenticate against `/api/auth/post/getToken` using email/password, then calls `/api/public/routingsvc/route` with an `Authorization` token header.
 
 Check the current provider terms, quota, and retention rules before redistributing raw route results. The project therefore keeps raw observations local by default and publishes only derived summaries plus the reproducible methodology. Do not place API keys, access tokens, raw provider response dumps, or credential-bearing logs in Git.

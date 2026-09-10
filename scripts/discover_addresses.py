@@ -35,10 +35,13 @@ def main(argv: list[str] | None = None) -> int:
         client = None
         if args.resolve_missing:
             load_environment()
+            access_token = credential("ONEMAP_ACCESS_TOKEN")
             email, password = credential("ONEMAP_EMAIL"), credential("ONEMAP_PASSWORD")
-            if not email or not password:
-                raise ConfigError("--resolve-missing requires ONEMAP_EMAIL and ONEMAP_PASSWORD in .env")
-            client = OneMapClient(email, password)
+            if not access_token and (not email or not password):
+                raise ConfigError(
+                    "--resolve-missing requires ONEMAP_ACCESS_TOKEN, or both ONEMAP_EMAIL and ONEMAP_PASSWORD, in .env"
+                )
+            client = OneMapClient(email, password, access_token=access_token)
         resolved = [resolve_with_onemap(row, client) if client else row for row in source_rows]
         counts: dict[str, int] = {}
         for row in resolved:

@@ -28,10 +28,11 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config()
         destination(config, require_coordinates=True)
         load_environment()
+        access_token = credential("ONEMAP_ACCESS_TOKEN")
         email = credential("ONEMAP_EMAIL")
         password = credential("ONEMAP_PASSWORD")
-        if (not email or not password) and not args.dry_run:
-            raise ConfigError("ONEMAP_EMAIL and ONEMAP_PASSWORD must be set in .env")
+        if not access_token and (not email or not password) and not args.dry_run:
+            raise ConfigError("Set ONEMAP_ACCESS_TOKEN, or set both ONEMAP_EMAIL and ONEMAP_PASSWORD, in .env")
         address_connection = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
         rows = list(
             iter_addresses(address_connection, config["addresses"]["include_confidence"], args.limit, args.postal_code)
@@ -43,7 +44,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run:
             return 0
         observation_connection = init_observations_db(resolve_path(config, config["observations_database"]))
-        client = OneMapClient(email, password)
+        client = OneMapClient(email, password, access_token=access_token)
         collect_onemap(rows, config, observation_connection, client)
         return 0
     except (ConfigError, ProviderError, ValueError) as exc:

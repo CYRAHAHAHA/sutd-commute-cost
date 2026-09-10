@@ -3,7 +3,7 @@
 ## First run
 
 1. Set the SUTD coordinate in `config/project.json`.
-2. Copy `.env.example` to `.env` and set provider credentials.
+2. Copy `.env.example` to `.env` and set provider credentials. `ONEMAP_ACCESS_TOKEN` alone is sufficient for OneMap; email/password are optional refresh credentials.
 3. Import a reviewed residential source CSV.
 4. Run both providers against `--limit 1` or `--limit 10` and inspect the SQLite rows.
 5. Build the summary and static dataset.

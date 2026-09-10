@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -30,28 +32,54 @@ def parse_total_time(payload: Any) -> int | None:
     return None
 
 
+def token_expiry(token: str) -> float:
+    """Read an optional JWT exp claim without verifying the token signature."""
+    try:
+        encoded_payload = token.split(".")[1]
+        encoded_payload += "=" * (-len(encoded_payload) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(encoded_payload).decode("utf-8"))
+        return float(payload.get("exp", 0))
+    except (IndexError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+        return 0
+
+
 class OneMapClient:
     def __init__(
         self,
-        email: str,
-        password: str,
+        email: str | None = None,
+        password: str | None = None,
         base_url: str = "https://www.onemap.gov.sg",
         client: httpx.Client | None = None,
         clock: Callable[[], float] = time.time,
+        access_token: str | None = None,
     ):
-        if not email or not password:
-            raise ValueError("ONEMAP_EMAIL and ONEMAP_PASSWORD are required for OneMap collection")
-        self.email = email
-        self.password = password
+        self.email = email.strip() if email else None
+        self.password = password.strip() if password else None
+        self._token = access_token.strip() if access_token else None
+        if not self._token and not (self.email and self.password):
+            raise ValueError(
+                "Set ONEMAP_ACCESS_TOKEN, or set both ONEMAP_EMAIL and ONEMAP_PASSWORD, for OneMap collection"
+            )
         self.base_url = base_url.rstrip("/")
         self.client = client or httpx.Client(timeout=60.0)
         self.clock = clock
-        self._token: str | None = None
-        self._expiry: float = 0
+        self._expiry: float = token_expiry(self._token) if self._token else 0
+
+    @property
+    def can_refresh_token(self) -> bool:
+        return bool(self.email and self.password)
 
     def authenticate(self, force: bool = False) -> str:
-        if self._token and not force and self.clock() < self._expiry - 60:
+        if self._token and not force and (not self._expiry or self.clock() < self._expiry - 60):
             return self._token
+        if not self.can_refresh_token:
+            if self._token:
+                return self._token
+            raise ProviderError(
+                "OneMap access token is unavailable; set ONEMAP_ACCESS_TOKEN or provide email/password",
+                error_code="AUTHENTICATION_FAILED",
+                retryable=False,
+            )
         response = self.client.post(
             f"{self.base_url}/api/auth/post/getToken",
             json={"email": self.email, "password": self.password},
@@ -79,6 +107,13 @@ class OneMapClient:
         while True:
             response = self.client.get(f"{self.base_url}{path}", headers={"Authorization": token}, params=params)
             if response.status_code == 401 and not refreshed:
+                if not self.can_refresh_token:
+                    raise ProviderError(
+                        "OneMap access token was rejected or expired; provide a new ONEMAP_ACCESS_TOKEN",
+                        http_status=401,
+                        error_code="AUTHENTICATION_FAILED",
+                        retryable=False,
+                    )
                 token = self.authenticate(force=True)
                 refreshed = True
                 continue
@@ -93,10 +128,14 @@ class OneMapClient:
         if isinstance(payload, dict) and payload.get("error"):
             error = str(payload["error"])
             if "expired" in error.lower() and not refreshed:
+                if not self.can_refresh_token:
+                    raise ProviderError(
+                        "OneMap access token expired; provide a new ONEMAP_ACCESS_TOKEN",
+                        error_code="AUTHENTICATION_FAILED",
+                        retryable=False,
+                    )
                 token = self.authenticate(force=True)
-                response = self.client.get(
-                    f"{self.base_url}{path}", headers={"Authorization": token}, params=params
-                )
+                response = self.client.get(f"{self.base_url}{path}", headers={"Authorization": token}, params=params)
                 payload = response.json()
                 if not (isinstance(payload, dict) and payload.get("error")):
                     return payload

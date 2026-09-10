@@ -45,11 +45,12 @@ For route collection, set:
 
 ```dotenv
 GOOGLE_MAPS_API_KEY=...
+ONEMAP_ACCESS_TOKEN=...
 ONEMAP_EMAIL=...
 ONEMAP_PASSWORD=...
 ```
 
-The Google key is used only by local Python code. OneMap's official authentication endpoint returns a token valid for three days; the client caches it in memory and refreshes it after expiry/401 responses. `.env` is ignored by Git.
+The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git.
 
 ## Address discovery
 

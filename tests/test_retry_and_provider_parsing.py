@@ -6,7 +6,7 @@ import httpx
 
 from commute.collector import ProviderError, call_with_retries
 from commute.providers.google import GoogleRoutesClient, parse_duration
-from commute.providers.onemap import OneMapClient, parse_total_time
+from commute.providers.onemap import OneMapClient, parse_total_time, token_expiry
 from commute.retry import retry_decision
 
 
@@ -84,3 +84,20 @@ def test_onemap_client_authenticates_and_routes():
     client = OneMapClient("email", "password", client=httpx.Client(transport=httpx.MockTransport(handler)))
     assert client.route((1.3, 103.8), (1.34, 103.96), "2026-09-14", "06:20") == 777
     assert calls == ["/api/auth/post/getToken", "/api/public/routingsvc/route"]
+
+
+def test_onemap_access_token_can_be_used_without_email_or_password():
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["authorization"] = request.headers["Authorization"]
+        return httpx.Response(200, json={"route_summary": {"total_time": 888}})
+
+    client = OneMapClient(
+        access_token="existing-token",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    assert client.route((1.3, 103.8), (1.34, 103.96), "2026-09-14", "06:20") == 888
+    assert seen == {"path": "/api/public/routingsvc/route", "authorization": "existing-token"}
+    assert token_expiry("not-a-jwt") == 0
