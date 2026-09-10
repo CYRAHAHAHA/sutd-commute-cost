@@ -65,6 +65,8 @@ ONEMAP_PASSWORD=...
 
 The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git. The current classified production route workload is 149,265 calls for 16,585 routed origins: a pacing-only floor of about 10 hours 23 minutes at the configured 4 requests/second. The collector uses 16 workers and 32 in-flight jobs behind one shared limiter; a live benchmark completed at roughly 3.5 jobs/second, projecting about 12 hours before retries. A fresh token is still required; the collector stops safely on authentication failure rather than mass-marking remaining jobs as failed.
 
+Full OneMap runs begin with a deterministic 30-origin distributed preflight and refuse to continue when its failure rate exceeds the configured 20% limit. This protects the collection from OneMap date-window behavior such as a future service date returning `ROUTE_NOT_FOUND` for a geographically clustered set of otherwise valid origins. Use `--skip-preflight` only after reviewing the preflight output.
+
 Before OneMap collection, classify the named private developments. This keeps HDB blocks individual, collapses named condo/EC postal points to a medoid postcode, and excludes landed homes from scheduled mapping:
 
 ```powershell

@@ -59,6 +59,7 @@ Let `N` be the number of default-eligible residential origins (`VERIFIED` and `L
 At the current configured pacing of four OneMap requests per second (240/minute, below the documented 300 calls/minute tokenized-API ceiling):
 
 - OneMap requires `9 × R` route calls in the adopted three-day/three-time configuration, where `R` is the routed-origin count after private-development grouping and landed-home exclusion. The current address database has `R = 16,585`, so the full workload is `149,265` route calls and the pacing-only lower bound is about 10 hours 23 minutes at four calls per second. The collector uses 16 workers, 32 in-flight jobs, and a single shared limiter at four requests per second to overlap normal request latency without multiplying provider traffic. Use the date-scoped option when the provider's rolling date window prevents all configured dates from being queried in one run.
+- A full OneMap run automatically performs a distributed preflight over 30 origins before the full workload. It refuses to continue when more than 20% of those observations fail, which catches date-specific service-window problems before tens of thousands of calls are spent. Review the failures and use `--skip-preflight` only when deliberately accepting that risk.
 - Google requires `9 × S` route elements and `9 × ceil(S / 90)` matrix HTTP requests. At the default maximum `S = 1,000`, that is 9,000 elements and 108 matrix requests, or approximately 1 minute 48 seconds of pacing time before network latency and retries.
 
 Illustrative OneMap pacing-only bounds are:

@@ -47,6 +47,8 @@
       "max_attempts": 5,
       "parallel_workers": 16,
       "max_in_flight": 32,
+      "preflight_sample_size": 30,
+      "preflight_max_failure_rate": 0.2,
       "origin_grouping": {
         "enabled": true,
         "source": "ura_private_residential",

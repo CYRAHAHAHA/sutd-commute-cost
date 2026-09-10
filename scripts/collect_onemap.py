@@ -16,6 +16,7 @@ from commute.config import (
     resolve_path,
 )
 from commute.db import init_addresses_db, init_observations_db, iter_onemap_origins
+from commute.preflight import evenly_spaced_sample
 from commute.providers.onemap import OneMapClient, token_expiry
 from commute.runners import collect_onemap
 
@@ -32,6 +33,11 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--all", action="store_true", help="Select all included residential origins")
     result.add_argument("--dry-run", action="store_true", help="Print workload and make no API calls")
+    result.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the distributed quality gate before --all (requires deliberate review)",
+    )
     return result
 
 
@@ -106,6 +112,30 @@ def main(argv: list[str] | None = None) -> int:
             base_url=credential("ONEMAP_BASE_URL") or "https://www.onemap.gov.sg",
             access_token=access_token,
         )
+        if args.all and not args.skip_preflight:
+            preflight_size = max(1, int(spec.get("preflight_sample_size", 30)))
+            preflight_rows = evenly_spaced_sample(rows, preflight_size)
+            print(
+                f"ONEMAP preflight: {len(preflight_rows):,} distributed origins × {len(spec['times'])} times; "
+                "persisting results before the full run"
+            )
+            preflight_stats = collect_onemap(preflight_rows, run_config, observation_connection, client)
+            attempted = preflight_stats["success"] + preflight_stats["failed"] + preflight_stats["skipped"]
+            failure_rate = preflight_stats["failed"] / attempted if attempted else 1.0
+            max_failure_rate = float(spec.get("preflight_max_failure_rate", 0.2))
+            print(
+                f"ONEMAP preflight result: {preflight_stats['success']:,} success, "
+                f"{preflight_stats['failed']:,} failed, {preflight_stats['skipped']:,} skipped; "
+                f"failure rate {failure_rate:.1%} (limit {max_failure_rate:.1%})"
+            )
+            if failure_rate > max_failure_rate:
+                raise ConfigError(
+                    "Refusing full OneMap collection: distributed preflight failure rate "
+                    f"{failure_rate:.1%} exceeds configured limit {max_failure_rate:.1%}. "
+                    "Wait for the service date to become routable, or use --skip-preflight only after review."
+                )
+        elif args.all and args.skip_preflight:
+            print("ONEMAP preflight skipped by explicit --skip-preflight")
         collect_onemap(rows, run_config, observation_connection, client)
         return 0
     except (ConfigError, ProviderError, ValueError) as exc:

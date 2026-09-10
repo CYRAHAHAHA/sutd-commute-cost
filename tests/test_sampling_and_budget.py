@@ -4,6 +4,7 @@ from commute.collector import GoogleBudget, GoogleBudgetExceeded
 from commute.config import google_sampling_settings
 from commute.db import google_usage_events, init_addresses_db, init_observations_db, record_google_usage, upsert_address
 from commute.models import Address
+from commute.preflight import evenly_spaced_sample
 from commute.sampling import haversine_km, prepare_google_population, stratified_sample
 
 
@@ -20,6 +21,13 @@ def test_haversine_and_reproducible_stratified_sample(test_config):
     assert [row["postal_code"] for row in first] == [row["postal_code"] for row in second]
     all_strata = stratified_sample(rows[1:], 3, 123, 0.02)
     assert {row["postal_code"] for row in all_strata} == {"100001", "100002", "200001"}
+
+
+def test_evenly_spaced_preflight_sample_is_deterministic():
+    rows = [{"postal_code": f"{index:06d}"} for index in range(10)]
+    sample = evenly_spaced_sample(rows, 4)
+    assert [row["postal_code"] for row in sample] == ["000000", "000003", "000006", "000009"]
+    assert evenly_spaced_sample(rows, 0) == []
 
 
 def test_google_population_persists_radius_exclusion_and_sample(test_config, tmp_path):
