@@ -134,6 +134,8 @@ npm ci
 npm run build
 ```
 
+The normal public-dataset command verifies that every expected OneMap routed-origin job and every selected Google validation job has a persisted terminal row before writing website files. During an incomplete collection, use `uv run python -m scripts.build_public_dataset --allow-incomplete` only for a local preview; never deploy that output.
+
 Commit the generated `website/data/` files, push `main`, and let the included Pages workflow deploy them. Deployment does not access provider APIs.
 
 ## Integration checks

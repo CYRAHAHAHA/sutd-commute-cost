@@ -166,6 +166,8 @@ npm run build
 
 The production artifacts are `website/data/commute-summary.json` and `website/data/methodology.json`. The browser ships a compact row-oriented summary (about 11 MB for the current 94,334-postcode index); raw route observations remain in local SQLite and can be exported to CSV where provider licensing permits. The default static frontend uses the OneMap mean as the headline coverage estimate; Google and the equal-weight Combined value appear as validation detail when the selected postcode has sufficient Google samples. It does not call a paid API. Landed homes or unknown postcodes can receive live estimates only when `website/.env` sets `VITE_LIVE_ROUTE_ENDPOINT` to a separately deployed secure proxy; provider tokens must never be embedded in GitHub Pages JavaScript. The proxy must return the documented `PostcodeSummary` JSON shape and enforce its own authentication, rate limits, and abuse controls.
 
+`build_public_dataset` is a production gate: it refuses to write a deployable dataset while expected OneMap or sampled Google job keys are missing. For a local preview during collection, use `uv run python -m scripts.build_public_dataset --allow-incomplete`; do not deploy that preview.
+
 ## Tests and validation
 
 ```powershell

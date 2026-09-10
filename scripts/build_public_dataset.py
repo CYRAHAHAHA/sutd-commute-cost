@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 from commute.config import (
+    ConfigError,
     expected_samples,
     google_sampling_settings,
     load_config,
@@ -12,6 +15,8 @@ from commute.config import (
     minimum_successful_samples,
     resolve_path,
 )
+from commute.db import init_addresses_db, init_observations_db, iter_onemap_origins
+from commute.runners import jobs_for_provider
 from scripts.build_summary import build_summary
 
 STATUS_CODES = {"SUCCESS": "S", "INSUFFICIENT_DATA": "I", "EXCLUDED": "X"}
@@ -80,7 +85,55 @@ def compact_summary(summary: dict) -> dict:
     }
 
 
-def build_public_dataset(config: dict) -> tuple[Path, Path]:
+def collection_completeness(config: dict) -> dict[str, dict[str, int]]:
+    """Count expected and persisted job keys for the production populations."""
+    addresses = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
+    observations = init_observations_db(resolve_path(config, config["observations_database"]))
+    routed = list(iter_onemap_origins(addresses, config["addresses"]["include_confidence"], None, None))
+    populations = {
+        "ONEMAP": routed,
+        "GOOGLE": [row for row in routed if row["google_sample_selected"]],
+    }
+    result: dict[str, dict[str, int]] = {}
+    for provider, rows in populations.items():
+        expected = {
+            (job.postal_code, job.service_date, job.query_time)
+            for job in jobs_for_provider(config, provider, rows)
+        }
+        actual = {
+            (row[0], row[2], row[3])
+            for row in observations.execute(
+                "SELECT postal_code, provider, service_date, query_time FROM commute_observation WHERE provider=?",
+                (provider,),
+            )
+        }
+        matched = len(expected & actual)
+        result[provider] = {
+            "population": len(rows),
+            "expected_jobs": len(expected),
+            "persisted_jobs": matched,
+            "missing_jobs": len(expected - actual),
+        }
+    return result
+
+
+def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[Path, Path]:
+    completeness = collection_completeness(config)
+    incomplete = {provider: values for provider, values in completeness.items() if values["missing_jobs"]}
+    if incomplete and not allow_incomplete:
+        details = "; ".join(
+            f"{provider}: {values['persisted_jobs']:,}/{values['expected_jobs']:,} jobs"
+            for provider, values in incomplete.items()
+        )
+        raise ConfigError(
+            "Refusing production dataset build because collection is incomplete (" + details + "). "
+            "Finish the configured provider runs, or use --allow-incomplete only for local preview."
+        )
+    for provider, values in completeness.items():
+        print(
+            f"{provider} dataset coverage: {values['persisted_jobs']:,}/{values['expected_jobs']:,} jobs "
+            f"({values['missing_jobs']:,} missing)"
+        )
     summary = build_summary(config)
     sampling = google_sampling_settings(config)
     website_data = resolve_path(config, "website/data")
@@ -130,9 +183,20 @@ def build_public_dataset(config: dict) -> tuple[Path, Path]:
 
 
 def main() -> int:
-    config = load_config()
-    load_environment()
-    paths = build_public_dataset(config)
+    parser = argparse.ArgumentParser(description="Build the static postcode dataset.")
+    parser.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Write a local preview even when configured collection jobs are missing; never use for deployment",
+    )
+    args = parser.parse_args()
+    try:
+        config = load_config()
+        load_environment()
+        paths = build_public_dataset(config, allow_incomplete=args.allow_incomplete)
+    except ConfigError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     print("Wrote:")
     for path in paths:
         print(f"  {path}")
