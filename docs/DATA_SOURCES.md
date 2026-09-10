@@ -18,6 +18,8 @@ The downloaded HDB source files belong in ignored `data/input/`; record their re
 
 The private-residential layer uses URA's official [No of Dwelling Units dataset](https://data.gov.sg/datasets/d_be71daeab5930f96b90ad2857454d876/view). Its GeoJSON contains a postal code, property type, project, and point coordinate for each private-residential dwelling-unit point. `scripts.import_ura` imports it locally without geocoding calls, marks it `VERIFIED`, and preserves HDB as the preferred record on a postal overlap. The source is refreshed outside Git in `data/input/URA_NoOfDwellingUnits.geojson`.
 
+The resolver is configured at four OneMap Search calls per second (240/minute), below OneMap's documented tokenized API limit of 300 calls/minute. If SLA changes the account limit or the project receives a 429 response, lower the versioned setting before resuming.
+
 OneMap Search is available as an optional coordinate resolver for rows without usable coordinates. A candidate whose residential classification is not authoritative should be marked `LIKELY`; unresolved or non-residential candidates must not enter the default route workload.
 
 ## Routing providers

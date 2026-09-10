@@ -43,7 +43,7 @@ The Google command makes 9 route elements across the configured three dates and 
 
 Let `N` be the number of default-eligible residential origins (`VERIFIED` and `LIKELY`) after import, and let `S` be the number of eligible origins remaining after the Google radius exclusion. The exact nationwide runtime cannot be known until that database exists.
 
-At the current configured pacing of one request per second:
+At the current configured pacing of four OneMap requests per second (240/minute, below the documented 300 calls/minute tokenized-API ceiling):
 
 - OneMap requires `70 × N` route calls, so its pacing-only lower bound is approximately `70 × N` seconds. For the current three-row fixture, that is 210 seconds (3 minutes 30 seconds).
 - Google requires `9 × S` route elements and `9 × ceil(S / 90)` matrix HTTP requests. At the default maximum `S = 1,000`, that is 9,000 elements and 108 matrix requests, or approximately 1 minute 48 seconds of pacing time before network latency and retries.
@@ -62,9 +62,9 @@ These are lower bounds, not promises: HTTP latency, 429 responses, transient fai
 
 The live Google smoke test used 9 ledger events. Therefore, after the HDB population is complete, the default 1,000-origin production sample (9,000 new events) is expected to stop at the configured 9,000-event guard. To stay under that guard, use a 999-origin production sample (`--all --limit 999 --confirm-large-run`), or use `--override-budget` only after explicitly checking the current month's Google usage and accepting the additional headroom reduction. Never delete or edit the usage ledger to hide smoke-test events.
 
-Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured one request per second, 10,796 current HDB candidates require a pacing-only lower bound of about 3 hours. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is a separate remaining source-acquisition task.
+Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured four requests per second, 10,796 current HDB candidates require a pacing-only lower bound of about 45 minutes. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is imported locally from URA and does not consume OneMap geocoding calls.
 
-For the current HDB candidate count, the eventual OneMap route collection is approximately `10,796 × 70 = 755,720` route calls, or about 8 days 17 hours at one request per second before latency, retries, and failures. This is an explicit long-running operation; the repository does not start it as a side effect of address import or website build.
+For the current HDB candidate count, the eventual OneMap route collection is approximately `10,796 × 70 = 755,720` route calls, or about 2 days 5 hours at four requests per second before latency, retries, and failures. This is an explicit long-running operation; the repository does not start it as a side effect of address import or website build.
 
 ## Resuming
 
@@ -78,7 +78,7 @@ python -c "import sqlite3; c=sqlite3.connect('data/observations.sqlite'); print(
 
 ## Rate limits and costs
 
-Google transit matrices are batched, but every origin/arrival-time pair is still a billable route element according to the applicable Google pricing and quota plan. The default validation sample is at most 1,000 origins × 9 arrival observations = 9,000 planned events. Never omit `--confirm-large-run` from the Google full-run guard. The collector also refuses to exceed `GOOGLE_MONTHLY_REQUEST_BUDGET` unless `--override-budget` is explicit. OneMap calls are deliberately paced at one request per second by default; change the configured rate only after checking your account's current quota.
+Google transit matrices are batched, but every origin/arrival-time pair is still a billable route element according to the applicable Google pricing and quota plan. The default validation sample is at most 1,000 origins × 9 arrival observations = 9,000 planned events. Never omit `--confirm-large-run` from the Google full-run guard. The collector also refuses to exceed `GOOGLE_MONTHLY_REQUEST_BUDGET` unless `--override-budget` is explicit. OneMap calls are deliberately paced at four requests per second by default, below the documented 300 calls/minute tokenized-API ceiling; change the configured rate only after checking your account's current quota.
 
 The default 9,000-event budget leaves 1,000 events below Google's currently listed 10,000-event free usage cap for Compute Routes Essentials and Compute Route Matrix Essentials. Check Google's [current pricing and billing page](https://developers.google.com/maps/billing-and-pricing/pricing) before a production run. A local SQLite usage ledger records every matrix element reserved before an HTTP attempt, including retries, so a restart cannot silently reset the safety count.
 

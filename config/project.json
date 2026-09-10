@@ -42,7 +42,7 @@
       "mode": "TRANSIT",
       "max_walk_distance": 1000,
       "num_itineraries": 1,
-      "requests_per_second": 1.0,
+      "requests_per_second": 4.0,
       "max_attempts": 5
     }
   },
