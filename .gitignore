@@ -8,6 +8,7 @@ __pycache__/
 .playwright-cli/
 *.sqlite-shm
 *.sqlite-wal
+*.sqlite-journal
 data/*.sqlite
 dist/
 website/node_modules/
