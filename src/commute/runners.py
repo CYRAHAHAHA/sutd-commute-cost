@@ -74,11 +74,20 @@ def collect_google(
                     budget.reserve(len(jobs))
                     record_google_usage(connection, len(jobs))
                     stats["requests"] += 1
-                    return client.compute_route_matrix(
-                        [(job.origin_lat, job.origin_lng) for job in jobs],
-                        destination,
-                        as_utc_rfc3339(local_dt),
-                    )
+                    try:
+                        return client.compute_route_matrix(
+                            [(job.origin_lat, job.origin_lng) for job in jobs],
+                            destination,
+                            as_utc_rfc3339(local_dt),
+                        )
+                    except ProviderError:
+                        raise
+                    except Exception as exc:
+                        raise ProviderError(
+                            f"Google transport error: {exc}",
+                            error_code="TRANSPORT_ERROR",
+                            retryable=True,
+                        ) from exc
 
                 result, attempts = call_with_retries(
                     request_matrix,

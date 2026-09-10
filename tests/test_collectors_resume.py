@@ -1,11 +1,43 @@
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from commute.collector import ProviderError
-from commute.db import init_observations_db
+from commute.db import get_observation, google_usage_events, init_observations_db
 from commute.providers.google import MatrixResult
 from commute.runners import collect_google, collect_onemap
+
+
+class FlakyGoogleClient:
+    def __init__(self):
+        self.calls = 0
+
+    def compute_route_matrix(self, origins, destination, arrival_time):
+        self.calls += 1
+        if self.calls == 1:
+            raise httpx.ConnectError("temporary connection failure")
+        return {0: MatrixResult(900, "SUCCESS")}
+
+
+def test_google_transport_error_retries_and_persists_success(test_config, tmp_path):
+    connection = init_observations_db(tmp_path / "observations.sqlite")
+    client = FlakyGoogleClient()
+    sleeps = []
+    stats = collect_google(
+        [{"postal_code": "200640", "latitude": 1.3, "longitude": 103.85}],
+        test_config,
+        connection,
+        client,
+        logger=lambda _: None,
+        sleep=sleeps.append,
+    )
+    row = get_observation(connection, "200640", "GOOGLE", "2026-09-14", "07:30")
+    assert client.calls == 2
+    assert stats["success"] == 1
+    assert row["attempt_count"] == 2
+    assert google_usage_events(connection) == 2
+    assert sleeps == [1.0]
 
 
 class FakeGoogle:
