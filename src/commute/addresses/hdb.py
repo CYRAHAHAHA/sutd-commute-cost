@@ -98,6 +98,7 @@ _ROAD_WORDS = {
     "C'WEALTH": "COMMONWEALTH",
     "CWEALTH": "COMMONWEALTH",
     "GDN": "GARDEN",
+    "GDNS": "GARDENS",
     "KG": "KAMPONG",
     "NTH": "NORTH",
     "STH": "SOUTH",
