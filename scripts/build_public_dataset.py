@@ -127,11 +127,15 @@ def collection_completeness(config: dict) -> dict[str, dict[str, int]]:
 
 def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[Path, Path]:
     completeness = collection_completeness(config)
+    website_data = resolve_path(config, "website/data")
+    ready_path = website_data / "deployment-ready.json"
     incomplete = {
         provider: values
         for provider, values in completeness.items()
         if values["missing_jobs"] or not values["selection_ready"]
     }
+    if incomplete and ready_path.exists():
+        ready_path.unlink()
     if incomplete and not allow_incomplete:
         details = "; ".join(
             (
@@ -153,7 +157,6 @@ def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[
         )
     summary = build_summary(config)
     sampling = google_sampling_settings(config)
-    website_data = resolve_path(config, "website/data")
     website_data.mkdir(parents=True, exist_ok=True)
     public_path = website_data / "commute-summary.json"
     public_path.write_text(json.dumps(compact_summary(summary), separators=(",", ":")) + "\n", encoding="utf-8")
@@ -196,6 +199,20 @@ def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[
     }
     methodology_path = website_data / "methodology.json"
     methodology_path.write_text(json.dumps(methodology, indent=2) + "\n", encoding="utf-8")
+    if not incomplete:
+        ready_path.write_text(
+            json.dumps(
+                {
+                    "dataset_version": config.get("dataset_version"),
+                    "verified_at": methodology["generated_at"],
+                    "status": "COMPLETE",
+                    "coverage": completeness,
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     return public_path, methodology_path
 
 

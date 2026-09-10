@@ -134,7 +134,7 @@ npm ci
 npm run build
 ```
 
-The normal public-dataset command verifies that every expected OneMap routed-origin job and every selected Google validation job has a persisted terminal row before writing website files. It also requires the configured minimum Google production sample (999 selected origins by default), preventing a small smoke test from being mistaken for the validation layer. During an incomplete collection, use `uv run python -m scripts.build_public_dataset --allow-incomplete` only for a local preview; never deploy that output.
+The normal public-dataset command verifies that every expected OneMap routed-origin job and every selected Google validation job has a persisted terminal row before writing website files. It also requires the configured minimum Google production sample (999 selected origins by default), preventing a small smoke test from being mistaken for the validation layer. A successful build writes `website/data/deployment-ready.json`, and the Pages workflow refuses to deploy without it. During an incomplete collection, use `uv run python -m scripts.build_public_dataset --allow-incomplete` only for a local preview; that mode removes the deployment marker and must never be deployed.
 
 Commit the generated `website/data/` files, push `main`, and let the included Pages workflow deploy them. Deployment does not access provider APIs.
 
