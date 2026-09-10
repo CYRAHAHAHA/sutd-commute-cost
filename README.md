@@ -96,6 +96,7 @@ Import the official URA private-residential GeoJSON into the same postal lookup 
 ```powershell
 uv run python -m scripts.import_ura --dry-run
 uv run python -m scripts.import_ura
+uv run python -m scripts.finalize_addresses --confirm-production
 uv run python -m scripts.audit_addresses --require-complete --reject-fixtures
 ```
 

@@ -13,6 +13,7 @@ uv sync --extra dev
 uv run python -m scripts.discover_addresses --input data/sample_residential_addresses.csv
 uv run python -m scripts.import_hdb --dry-run
 uv run python -m scripts.import_ura --dry-run
+uv run python -m scripts.finalize_addresses --confirm-production
 uv run python -m scripts.audit_addresses --require-complete --reject-fixtures
 uv run python -m scripts.collect_onemap --limit 1
 uv run python -m scripts.collect_google --limit 1
