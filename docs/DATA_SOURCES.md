@@ -16,6 +16,8 @@ The first concrete adapter is `scripts.import_hdb`. It consumes the official [HD
 
 The downloaded HDB source files belong in ignored `data/input/`; record their retrieval date and the data.gov.sg dataset links in the operator notes. The [data.gov.sg download API](https://guide.data.gov.sg/developer-guide/dataset-apis/download-dataset) can be used to refresh them. HDB is not the same as all Singapore residences: private condominiums, apartments, landed homes, and mixed-use developments require additional source adapters before the project can claim complete national residential coverage.
 
+The private-residential layer uses URA's official [No of Dwelling Units dataset](https://data.gov.sg/datasets/d_be71daeab5930f96b90ad2857454d876/view). Its GeoJSON contains a postal code, property type, project, and point coordinate for each private-residential dwelling-unit point. `scripts.import_ura` imports it locally without geocoding calls, marks it `VERIFIED`, and preserves HDB as the preferred record on a postal overlap. The source is refreshed outside Git in `data/input/URA_NoOfDwellingUnits.geojson`.
+
 OneMap Search is available as an optional coordinate resolver for rows without usable coordinates. A candidate whose residential classification is not authoritative should be marked `LIKELY`; unresolved or non-residential candidates must not enter the default route workload.
 
 ## Routing providers

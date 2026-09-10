@@ -24,7 +24,7 @@ OneMap runs across every default-eligible residential origin (`VERIFIED` and `LI
 
 ### Residential origin population
 
-The first production layer is the official HDB Property Information dataset. Rows with `residential=Y` are resolved from exact block/street searches through OneMap, checked against the returned block and canonicalized street, and stored as one deduplicated postal-code point with source provenance. The resolver checkpoints every source record in SQLite and can resume after interruption. This is a defensible HDB layer, not a claim that private condominiums, apartments, landed homes, and mixed-use residences have already been enumerated; those sources require additional reviewed adapters.
+The production population combines two official layers. HDB Property Information rows with `residential=Y` are resolved from exact block/street searches through OneMap, checked against the returned block and canonicalized street, and stored as deduplicated postal-code points with source provenance. URA's No of Dwelling Units GeoJSON supplies private landed, non-landed, and executive-condominium postal points and coordinates directly. HDB remains the preferred record on an overlap. The HDB resolver checkpoints every source record in SQLite and can resume after interruption; the URA import is local and does not consume routing/geocoding quota. The resulting population is still limited to what these official completed-residential layers represent; any future source must be added as a separately identified adapter rather than silently mixed in.
 
 ## Google validation layer
 

@@ -91,6 +91,15 @@ uv run python -m scripts.import_hdb
 
 The adapter filters the source's explicit `residential=Y` rows, searches OneMap using the exact block and street, verifies the returned block/street, and persists a checkpoint for every source record. It does not use an unsafe block-number-only join. HDB is the authoritative first layer; private residential sources still need separate reviewed adapters before claiming complete Singapore-wide coverage.
 
+Import the official URA private-residential GeoJSON into the same postal lookup database. It supplies coordinates directly, so this step does not consume OneMap requests:
+
+```powershell
+uv run python -m scripts.import_ura --dry-run
+uv run python -m scripts.import_ura
+```
+
+The URA adapter covers landed, non-landed, and executive-condominium points, deduplicates by postal code, and retains an existing HDB record when the two official layers overlap.
+
 ## Safe collection commands
 
 The repository refuses an unscoped collection. For OneMap, `--limit` caps origins. For Google, `--limit` caps the reproducibly selected validation sample; the full eligible population is still used to allocate geographic strata. OneMap has 70 jobs per origin; Google has 9.
