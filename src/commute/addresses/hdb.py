@@ -97,10 +97,12 @@ _ROAD_WORDS = {
     "BT": "BUKIT",
     "C'WEALTH": "COMMONWEALTH",
     "CWEALTH": "COMMONWEALTH",
+    "GDN": "GARDEN",
     "KG": "KAMPONG",
     "NTH": "NORTH",
     "STH": "SOUTH",
     "TG": "TANJONG",
+    "UPP": "UPPER",
     "E": "EAST",
     "W": "WEST",
 }

@@ -50,6 +50,8 @@ def test_hdb_result_requires_matching_block_and_canonical_street():
     assert address.confidence == "VERIFIED"
     assert address.postal_code == "189673"
     assert canonical_road("C'WEALTH CRES") == "COMMONWEALTH CRESCENT"
+    assert canonical_road("UPP BOON KENG RD") == "UPPER BOON KENG ROAD"
+    assert canonical_road("TENGAH GDN AVE") == "TENGAH GARDEN AVENUE"
     assert canonical_road("ST. GEORGE'S RD") == "SAINT GEORGES ROAD"
     assert canonical_road("TG PAGAR PLAZA") == "TANJONG PAGAR PLAZA"
     assert canonical_road("JLN BT MERAH") == "JALAN BUKIT MERAH"
