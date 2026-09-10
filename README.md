@@ -146,7 +146,7 @@ uv run python -m scripts.collect_onemap --all --date 2026-09-14
 uv run python -m scripts.audit_observations --provider ONEMAP
 uv run python -m scripts.audit_observations --provider ONEMAP --require-complete
 
-# After the 9-event local Google smoke test, stay under the configured 9,000-event guard:
+# After the existing 18-event local Google smoke tests, stay under the configured 9,000-event guard:
 uv run python -m scripts.collect_google --all --limit 999 --confirm-large-run
 
 # Only with an explicit decision to exceed the configured 9,000-event guard
