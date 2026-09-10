@@ -1,0 +1,4 @@
+postal_code,address,latitude,longitude,residential_type,source,source_identifier,confidence
+200640,640 Rowell Road Singapore 200640,1.30743547948389,103.854713903431,HDB,sample_fixture,200640,VERIFIED
+460123,123 Bedok North Road Singapore 460123,1.327100,103.932200,HDB,sample_fixture,460123,VERIFIED
+560123,123 Ang Mo Kio Avenue 6 Singapore 560123,1.371800,103.846800,HDB,sample_fixture,560123,VERIFIED
