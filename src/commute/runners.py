@@ -151,19 +151,23 @@ def collect_onemap(
             if is_success(connection, job.postal_code, "ONEMAP", job.service_date, job.query_time):
                 stats["skipped"] += 1
                 continue
-            limiter.wait()
-            stats["requests"] += 1
             attempts = 0
             try:
-                duration, attempts = call_with_retries(
-                    lambda: client.route(
+
+                def request_route():
+                    limiter.wait()
+                    stats["requests"] += 1
+                    return client.route(
                         (job.origin_lat, job.origin_lng),
                         destination,
                         job.service_date,
                         job.query_time,
                         int(spec.get("max_walk_distance", 1000)),
                         int(spec.get("num_itineraries", 1)),
-                    ),
+                    )
+
+                duration, attempts = call_with_retries(
+                    request_route,
                     int(spec.get("max_attempts", 5)),
                     sleep=sleep or time_module.sleep,
                 )

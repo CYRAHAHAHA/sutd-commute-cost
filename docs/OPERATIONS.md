@@ -35,6 +35,29 @@ uv run python -m scripts.collect_onemap --limit 1
 
 The Google command makes 9 route elements across the configured three dates and arrival times (normally 9 matrix requests for one origin); OneMap makes 70 calls for one origin. Inspect the persisted rows and provider statuses before starting the full runs. Do not treat a successful dry run alone as evidence that nationwide collection can proceed.
 
+## Duration estimates
+
+Let `N` be the number of default-eligible residential origins (`VERIFIED` and `LIKELY`) after import, and let `S` be the number of eligible origins remaining after the Google radius exclusion. The exact nationwide runtime cannot be known until that database exists.
+
+At the current configured pacing of one request per second:
+
+- OneMap requires `70 × N` route calls, so its pacing-only lower bound is approximately `70 × N` seconds. For the current three-row fixture, that is 210 seconds (3 minutes 30 seconds).
+- Google requires `9 × S` route elements and `9 × ceil(S / 90)` matrix HTTP requests. At the default maximum `S = 1,000`, that is 9,000 elements and 108 matrix requests, or approximately 1 minute 48 seconds of pacing time before network latency and retries.
+
+Illustrative OneMap pacing-only bounds are:
+
+| Eligible origins | Route calls | Minimum pacing time |
+| ---: | ---: | ---: |
+| 100 | 7,000 | 1 h 57 min |
+| 500 | 35,000 | 9 h 43 min |
+| 1,000 | 70,000 | 19 h 27 min |
+| 5,000 | 350,000 | 4 d 1 h |
+| 10,000 | 700,000 | 8 d 2 h |
+
+These are lower bounds, not promises: HTTP latency, 429 responses, transient failures, and exponential backoff add time. Google retries are also counted in the persistent budget ledger; the configured 9,000-event guard can stop a run before retries exceed the cap. In that case, already successful rows remain safe and the remaining work can be resumed only with available budget or an explicit `--override-budget` decision.
+
+Address discovery/import is not included in these estimates. Importing a reviewed CSV with coordinates is normally quick; `--resolve-missing` adds a OneMap geocoding request for each unresolved candidate and should be tested in small batches first. The current route collectors are resumable at observation level, while source discovery remains dependent on the quality and completeness of the supplied residential source.
+
 ## Resuming
 
 Collectors generate the same deterministic job keys every time. A `SUCCESS` row is skipped. A failed row is eligible to run again, and each new result is persisted immediately. The database uses a unique constraint to make retries idempotent.
