@@ -33,6 +33,12 @@ def test_hdb_reader_filters_residential_and_deduplicates(tmp_path):
         "1 SAINT GEORGE'S ROAD SINGAPORE",
         "1 SAINT GEORGE'S ROAD",
     )
+    market = HDBResidentialCandidate("32", "NEW MKT RD", "32|NEW MKT RD")
+    assert market.search_values == (
+        "32 NEW MKT RD SINGAPORE",
+        "32 NEW MARKET ROAD SINGAPORE",
+        "32 NEW MARKET ROAD",
+    )
 
 
 def test_hdb_result_requires_matching_block_and_canonical_street():
@@ -53,6 +59,8 @@ def test_hdb_result_requires_matching_block_and_canonical_street():
     assert canonical_road("UPP BOON KENG RD") == "UPPER BOON KENG ROAD"
     assert canonical_road("TENGAH GDN AVE") == "TENGAH GARDEN AVENUE"
     assert canonical_road("TEBAN GDNS RD") == "TEBAN GARDENS ROAD"
+    assert canonical_road("TELOK BLANGAH HTS") == "TELOK BLANGAH HEIGHTS"
+    assert canonical_road("WOODLANDS SQ") == "WOODLANDS SQUARE"
     assert canonical_road("ST. GEORGE'S RD") == "SAINT GEORGES ROAD"
     assert canonical_road("TG PAGAR PLAZA") == "TANJONG PAGAR PLAZA"
     assert canonical_road("JLN BT MERAH") == "JALAN BUKIT MERAH"
