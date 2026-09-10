@@ -24,7 +24,9 @@ class HDBResidentialCandidate:
     @property
     def search_values(self) -> tuple[str, ...]:
         expanded = f"{self.block_number} {expanded_road(self.street)} SINGAPORE"
-        return (self.search_value,) if expanded == self.search_value else (self.search_value, expanded)
+        without_country = expanded.removesuffix(" SINGAPORE")
+        values = [self.search_value, expanded, without_country]
+        return tuple(dict.fromkeys(values))
 
 
 def _required_columns() -> set[str]:

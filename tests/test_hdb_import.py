@@ -24,9 +24,13 @@ def test_hdb_reader_filters_residential_and_deduplicates(tmp_path):
     assert len(rows) == 1
     assert rows[0].source_identifier == "1|BEACH RD"
     assert rows[0].search_value == "1 BEACH RD SINGAPORE"
-    assert rows[0].search_values == ("1 BEACH RD SINGAPORE", "1 BEACH ROAD SINGAPORE")
+    assert rows[0].search_values == ("1 BEACH RD SINGAPORE", "1 BEACH ROAD SINGAPORE", "1 BEACH ROAD")
     saint = HDBResidentialCandidate("1", "ST. GEORGE'S RD", "1|ST. GEORGE'S RD")
-    assert saint.search_values == ("1 ST. GEORGE'S RD SINGAPORE", "1 SAINT GEORGE'S ROAD SINGAPORE")
+    assert saint.search_values == (
+        "1 ST. GEORGE'S RD SINGAPORE",
+        "1 SAINT GEORGE'S ROAD SINGAPORE",
+        "1 SAINT GEORGE'S ROAD",
+    )
 
 
 def test_hdb_result_requires_matching_block_and_canonical_street():
