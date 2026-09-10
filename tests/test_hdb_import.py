@@ -25,6 +25,8 @@ def test_hdb_reader_filters_residential_and_deduplicates(tmp_path):
     assert rows[0].source_identifier == "1|BEACH RD"
     assert rows[0].search_value == "1 BEACH RD SINGAPORE"
     assert rows[0].search_values == ("1 BEACH RD SINGAPORE", "1 BEACH ROAD SINGAPORE")
+    saint = HDBResidentialCandidate("1", "ST. GEORGE'S RD", "1|ST. GEORGE'S RD")
+    assert saint.search_values == ("1 ST. GEORGE'S RD SINGAPORE", "1 SAINT GEORGE'S ROAD SINGAPORE")
 
 
 def test_hdb_result_requires_matching_block_and_canonical_street():
@@ -41,6 +43,9 @@ def test_hdb_result_requires_matching_block_and_canonical_street():
     assert address.source == HDB_SOURCE
     assert address.confidence == "VERIFIED"
     assert address.postal_code == "189673"
+    assert canonical_road("C'WEALTH CRES") == "COMMONWEALTH CRESCENT"
+    assert canonical_road("ST. GEORGE'S RD") == "SAINT GEORGES ROAD"
+    assert canonical_road("TG PAGAR PLAZA") == "TANJONG PAGAR PLAZA"
     assert canonical_road("JLN BT MERAH") == "JALAN BUKIT MERAH"
 
 

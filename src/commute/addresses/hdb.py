@@ -23,8 +23,8 @@ class HDBResidentialCandidate:
 
     @property
     def search_values(self) -> tuple[str, ...]:
-        canonical = f"{self.block_number} {canonical_road(self.street)} SINGAPORE"
-        return (self.search_value,) if canonical == self.search_value else (self.search_value, canonical)
+        expanded = f"{self.block_number} {expanded_road(self.street)} SINGAPORE"
+        return (self.search_value,) if expanded == self.search_value else (self.search_value, expanded)
 
 
 def _required_columns() -> set[str]:
@@ -77,15 +77,32 @@ _ROAD_WORDS = {
     "ST": "STREET",
     "TER": "TERRACE",
     "BT": "BUKIT",
+    "C'WEALTH": "COMMONWEALTH",
+    "CWEALTH": "COMMONWEALTH",
+    "KG": "KAMPONG",
     "NTH": "NORTH",
     "STH": "SOUTH",
+    "TG": "TANJONG",
     "E": "EAST",
     "W": "WEST",
 }
 
 
+def expanded_road(value: Any) -> str:
+    raw_tokens = normalize_address(value).split()
+    result = []
+    for index, raw_token in enumerate(raw_tokens):
+        token = raw_token.replace(".", "")
+        if token == "ST" and index + 1 < len(raw_tokens):
+            next_token = raw_tokens[index + 1].replace(".", "")
+            if next_token in {"GEORGE", "GEORGE'S"}:
+                token = "SAINT"
+        result.append(_ROAD_WORDS.get(token, token))
+    return " ".join(result)
+
+
 def canonical_road(value: Any) -> str:
-    return " ".join(_ROAD_WORDS.get(token, token) for token in normalize_address(value).split())
+    return expanded_road(value).replace("'", "")
 
 
 def _contains_token_sequence(haystack: str, needle: str) -> bool:
