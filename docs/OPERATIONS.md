@@ -57,7 +57,11 @@ Illustrative OneMap pacing-only bounds are:
 
 These are lower bounds, not promises: HTTP latency, 429 responses, transient failures, and exponential backoff add time. Google retries are also counted in the persistent budget ledger; the configured 9,000-event guard can stop a run before retries exceed the cap. In that case, already successful rows remain safe and the remaining work can be resumed only with available budget or an explicit `--override-budget` decision.
 
+The live Google smoke test used 9 ledger events. Therefore, after the HDB population is complete, the default 1,000-origin production sample (9,000 new events) is expected to stop at the configured 9,000-event guard. To stay under that guard, use a 999-origin production sample (`--all --limit 999 --confirm-large-run`), or use `--override-budget` only after explicitly checking the current month's Google usage and accepting the additional headroom reduction. Never delete or edit the usage ledger to hide smoke-test events.
+
 Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured one request per second, 10,796 current HDB candidates require a pacing-only lower bound of about 3 hours. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is a separate remaining source-acquisition task.
+
+For the current HDB candidate count, the eventual OneMap route collection is approximately `10,796 × 70 = 755,720` route calls, or about 8 days 17 hours at one request per second before latency, retries, and failures. This is an explicit long-running operation; the repository does not start it as a side effect of address import or website build.
 
 ## Resuming
 

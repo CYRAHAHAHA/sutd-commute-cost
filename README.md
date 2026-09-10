@@ -112,6 +112,9 @@ uv run python -m scripts.collect_google --postal-code 200640
 uv run python -m scripts.collect_onemap --all
 uv run python -m scripts.collect_google --all --confirm-large-run
 
+# After the 9-event local Google smoke test, stay under the configured 9,000-event guard:
+uv run python -m scripts.collect_google --all --limit 999 --confirm-large-run
+
 # Only with an explicit decision to exceed the configured 9,000-event guard
 uv run python -m scripts.collect_google --all --confirm-large-run --override-budget
 ```
