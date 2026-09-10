@@ -14,19 +14,21 @@ All local times use `Asia/Singapore` (UTC+08:00). The source of truth is `config
 
 ## OneMap coverage layer
 
-OneMap uses the public transport routing endpoint with `routeType=pt`, `mode=TRANSIT`, `maxWalkDistance=1000`, and one itinerary. For each date, the query time is a home departure time:
+OneMap uses the public transport routing endpoint with `routeType=pt`, `mode=TRANSIT`, `maxWalkDistance=1000`, and one itinerary. The production coverage sample uses these dates and departure times:
 
-`06:20, 06:25, 06:30, 06:35, 06:40, 06:45, 06:50`
+`2026-09-14, 2026-09-16, 2026-09-18 × 06:30, 06:45, 07:00`
+
+This is a deliberate reduced temporal sample: Monday, Wednesday, and Friday with three representative departures spanning the original 06:20–06:50 window. It preserves every eligible residential postcode while keeping the complete OneMap workload substantially smaller than the original 70-observation design. It is not silently presented as the original 70-observation design; the provider-specific sampling definition is generated into the public methodology artifact.
 
 OneMap expects dates as `MM-DD-YYYY` and times as `HH:MM:SS`. Its `route_summary.total_time` is stored as seconds.
 
-OneMap runs across every default-eligible residential origin (`VERIFIED` and `LIKELY`) and is not limited by the Google budget guard.
+OneMap runs across every default-eligible HDB origin and every available named private non-landed/EC development representative. Private landed homes are retained as residential index records but excluded from scheduled mapping because one representative point for an estate or street would not be a defensible route origin. Named non-landed/EC developments are grouped by URA `PROJ_NAME`; the representative is the existing postcode point nearest the development's geographic medoid. Every member postcode remains searchable and inherits the representative's result with an explicit `REPRESENTATIVE` observation mode. Unnamed non-landed/EC points remain individual origins.
 
 ### Residential origin population
 
 The production population combines two official layers. HDB Property Information rows with `residential=Y` are resolved from exact block/street searches through OneMap, checked against the returned block and canonicalized street, and stored as deduplicated postal-code points with source provenance. URA's No of Dwelling Units GeoJSON supplies private landed, non-landed, and executive-condominium postal points and coordinates directly. HDB remains the preferred record on an overlap. The HDB resolver checkpoints every source record in SQLite and can resume after interruption; the URA import is local and does not consume routing/geocoding quota. The resulting population is still limited to what these official completed-residential layers represent; any future source must be added as a separately identified adapter rather than silently mixed in.
 
-The completed local source build contains 94,334 unique postal-code origins: 10,796 HDB records and 83,538 URA records. Three URA postal points overlap an HDB postal point and are retained under the HDB source, leaving 83,538 separate URA rows. The strict audit found zero duplicate postal keys and zero invalid coordinates.
+The completed local source build contains 94,334 unique postal-code origins: 10,796 HDB records and 83,538 URA records. Three URA postal points overlap an HDB postal point and are retained under the HDB source, leaving 83,538 separate URA rows. The strict audit found zero duplicate postal keys and zero invalid coordinates. The current grouping pass identifies 7,255 named private non-landed/EC postal points in 2,545 developments, leaves 3,244 unnamed private non-landed/EC points individual, and excludes 73,039 private-landed points from scheduled OneMap routing. That produces 16,585 routed origins.
 
 ## Google validation layer
 
@@ -42,7 +44,7 @@ The 9-observation design deliberately uses only the first experiment week's Mond
 
 Google transit queries accept an arrival or departure timestamp only within the documented window of up to 7 days in the past or 100 days in the future relative to execution. The fixed September 2026 dates must therefore be collected during that window; the [transit route documentation](https://developers.google.com/maps/documentation/routes/transit-route) also cautions that transit predictions can change over time.
 
-Before sampling, every address is annotated with its haversine distance to SUTD. Origins at or within `google_sampling.exclusion_radius_km` are retained in SQLite and public summaries with `google_exclusion_reason=within_3.5km_of_sutd` at the default radius, but receive no Google jobs.
+Before sampling, every scheduled-routing origin is annotated with its haversine distance to SUTD. Origins at or within `google_sampling.exclusion_radius_km` are retained in SQLite and public summaries with `google_exclusion_reason=within_3.5km_of_sutd` at the default radius, but receive no Google jobs. Landed homes already excluded from scheduled OneMap mapping are also excluded from the Google validation population, so the validation sample is drawn from locations that have a comparable OneMap result.
 
 The remaining origins are grouped into fixed latitude/longitude grid cells. A Hamilton/largest-remainder allocation assigns sample quotas proportionally to cell population; a SHA-256 rank derived from the configured seed and postal code selects rows reproducibly inside each cell. The default is at most 1,000 sampled origins.
 
@@ -52,7 +54,7 @@ The Google budget guard counts attempted matrix elements from a persisted SQLite
 
 Every expected job has a unique key: `(postal_code, provider, service_date, query_time)`. A successful provider mean is the arithmetic mean of successful `duration_seconds` values only. Failures are missing observations, never zero-minute values. The summary also records median, min, max, standard deviation, p10, p90, successful count, and expected count.
 
-The default minimum is 8 / 9 for Google and 60 / 70 for OneMap. Below its threshold, a provider is marked `INSUFFICIENT_DATA` and its mean is not eligible for the combined estimate. Google-excluded rows are marked `EXCLUDED`. Combined is exactly:
+The default minimum is 8 / 9 for both Google and OneMap. Below its threshold, a provider is marked `INSUFFICIENT_DATA` and its mean is not eligible for the combined estimate. Google-excluded rows are marked `EXCLUDED`. Combined is exactly:
 
 `(Google mean seconds + OneMap mean seconds) / 2`
 
@@ -61,3 +63,11 @@ It is not an average of all raw observations and is calculated only when both pr
 ## Publication choice
 
 The public dataset contains postcode summaries, Google inclusion/exclusion metadata, and methodology metadata. It intentionally does not ship raw observations in the browser bundle: the local SQLite database is the audit store, and `scripts.export_csv` supports controlled exports.
+
+## Unmapped and live lookup boundary
+
+The static site can recognize retained landed-home postcodes, but it does not call OneMap or Google from browser JavaScript by default. A live fallback requires a server-side proxy with its own authentication, rate limiting, abuse protection, and provider-terms review. Until that proxy is separately deployed, an excluded landed record is shown as known-but-unmapped rather than being presented as a zero-minute or fabricated result.
+
+## Unmapped and live lookup boundary
+
+The static site can recognize retained landed-home postcodes, but it does not call OneMap or Google from browser JavaScript. A live fallback would require a server-side proxy with its own authentication, rate limiting, abuse protection, and provider-terms review. Until that proxy is separately deployed, an excluded landed record is shown as known-but-unmapped rather than being presented as a zero-minute or fabricated result.

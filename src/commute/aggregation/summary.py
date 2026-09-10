@@ -98,6 +98,8 @@ def aggregate_rows(
         google_minimum = minimum_successful["GOOGLE"] if isinstance(minimum_successful, dict) else minimum_successful
         onemap_minimum = minimum_successful["ONEMAP"] if isinstance(minimum_successful, dict) else minimum_successful
         exclusion_reason = row_value(address, "google_exclusion_reason")
+        if not exclusion_reason and row_value(address, "onemap_exclusion_reason"):
+            exclusion_reason = row_value(address, "onemap_exclusion_reason")
         if exclusion_reason:
             google = {
                 "status": "EXCLUDED",
@@ -113,7 +115,22 @@ def aggregate_rows(
             }
         else:
             google = summarize_provider(grouped[(postal, "GOOGLE")], google_expected, google_minimum)
-        onemap = summarize_provider(grouped[(postal, "ONEMAP")], onemap_expected, onemap_minimum)
+        onemap_exclusion_reason = row_value(address, "onemap_exclusion_reason")
+        if onemap_exclusion_reason:
+            onemap = {
+                "status": "EXCLUDED",
+                "mean_seconds": None,
+                "median_seconds": None,
+                "min_seconds": None,
+                "max_seconds": None,
+                "stddev_seconds": None,
+                "p10_seconds": None,
+                "p90_seconds": None,
+                "successful_samples": 0,
+                "expected_samples": onemap_expected,
+            }
+        else:
+            onemap = summarize_provider(grouped[(postal, "ONEMAP")], onemap_expected, onemap_minimum)
         result[postal] = {
             "postal_code": postal,
             "latitude": address["latitude"],
@@ -122,6 +139,16 @@ def aggregate_rows(
             "google_exclusion_reason": exclusion_reason,
             "google_stratum": row_value(address, "google_stratum"),
             "google_sample_selected": bool(row_value(address, "google_sample_selected", 0)),
+            "onemap_group_key": row_value(address, "onemap_group_key"),
+            "onemap_group_representative": row_value(address, "onemap_group_representative"),
+            "onemap_group_size": row_value(address, "onemap_group_size"),
+            "onemap_exclusion_reason": onemap_exclusion_reason,
+            "onemap_observation_mode": (
+                "REPRESENTATIVE"
+                if row_value(address, "onemap_group_representative")
+                and row_value(address, "onemap_group_representative") != postal
+                else "DIRECT"
+            ),
             "google": google,
             "onemap": onemap,
             "combined": combined_summary(google, onemap),

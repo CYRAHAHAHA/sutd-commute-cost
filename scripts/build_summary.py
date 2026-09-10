@@ -18,7 +18,30 @@ def build_summary(config: dict) -> dict:
     address_connection = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
     observation_connection = init_observations_db(resolve_path(config, config["observations_database"]))
     addresses = list(iter_addresses(address_connection, config["addresses"]["include_confidence"]))
-    observations = list(iter_observations(observation_connection))
+    configured_keys = {
+        (provider, service_date, query_time)
+        for provider, spec in config["providers"].items()
+        for service_date in spec.get("dates", config["experiment"]["dates"])
+        for query_time in spec["times"]
+    }
+    observations = [
+        row
+        for row in iter_observations(observation_connection)
+        if (row["provider"], row["service_date"], row["query_time"]) in configured_keys
+    ]
+    direct_by_postal: dict[str, list] = {}
+    for observation in observations:
+        direct_by_postal.setdefault(observation["postal_code"], []).append(observation)
+    derived_observations = []
+    for address in addresses:
+        postal_code = address["postal_code"]
+        representative = address["onemap_group_representative"]
+        if representative and representative != postal_code and not direct_by_postal.get(postal_code):
+            for observation in direct_by_postal.get(representative, []):
+                cloned = dict(observation)
+                cloned["postal_code"] = postal_code
+                derived_observations.append(cloned)
+    observations.extend(derived_observations)
     rows = aggregate_rows(
         addresses,
         observations,

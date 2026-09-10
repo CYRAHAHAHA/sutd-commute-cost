@@ -29,7 +29,12 @@ CREATE TABLE IF NOT EXISTS residential_address (
     google_exclusion_reason TEXT,
     google_stratum TEXT,
     google_sample_selected INTEGER NOT NULL DEFAULT 0,
-    google_sample_seed INTEGER
+    google_sample_seed INTEGER,
+    onemap_group_key TEXT,
+    onemap_group_representative TEXT,
+    onemap_group_size INTEGER,
+    onemap_group_method TEXT,
+    onemap_exclusion_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_residential_confidence ON residential_address(confidence);
 CREATE TABLE IF NOT EXISTS address_resolution (
@@ -100,6 +105,11 @@ def init_addresses_db(path: str | Path) -> sqlite3.Connection:
         "google_stratum": "TEXT",
         "google_sample_selected": "INTEGER NOT NULL DEFAULT 0",
         "google_sample_seed": "INTEGER",
+        "onemap_group_key": "TEXT",
+        "onemap_group_representative": "TEXT",
+        "onemap_group_size": "INTEGER",
+        "onemap_group_method": "TEXT",
+        "onemap_exclusion_reason": "TEXT",
     }
     for column, definition in migrations.items():
         if column not in existing_columns:
@@ -242,6 +252,47 @@ def count_addresses(connection: sqlite3.Connection, include_confidence: Iterable
             f"SELECT COUNT(*) FROM residential_address WHERE confidence IN ({placeholders})", allowed
         ).fetchone()[0]
     )
+
+
+def iter_onemap_origins(
+    connection: sqlite3.Connection,
+    include_confidence: Iterable[str] = ("VERIFIED", "LIKELY"),
+    limit: int | None = None,
+    postal_code: str | None = None,
+) -> Iterator[sqlite3.Row]:
+    """Yield physical origins to route, collapsing only classified OneMap groups."""
+    allowed = tuple(include_confidence)
+    if not allowed:
+        return
+    placeholders = ",".join("?" for _ in allowed)
+    params: list[Any] = list(allowed)
+    if postal_code:
+        row = connection.execute(
+            f"SELECT * FROM residential_address WHERE postal_code=? AND confidence IN ({placeholders})",
+            [postal_code, *params],
+        ).fetchone()
+        if row is None:
+            return
+        if row["onemap_exclusion_reason"]:
+            return
+        representative = row["onemap_group_representative"] or row["postal_code"]
+        representative_row = connection.execute(
+            "SELECT * FROM residential_address WHERE postal_code=?", (representative,)
+        ).fetchone()
+        if representative_row is not None:
+            yield representative_row
+        return
+    query = (
+        "SELECT * FROM residential_address "
+        f"WHERE confidence IN ({placeholders}) "
+        "AND onemap_exclusion_reason IS NULL "
+        "AND (onemap_group_representative IS NULL OR postal_code=onemap_group_representative) "
+        "ORDER BY postal_code"
+    )
+    if limit is not None:
+        query += " LIMIT ?"
+        params.append(limit)
+    yield from connection.execute(query, params)
 
 
 def update_google_population(

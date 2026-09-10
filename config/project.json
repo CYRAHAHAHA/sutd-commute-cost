@@ -1,5 +1,5 @@
 {
-  "dataset_version": "2026.09.10",
+  "dataset_version": "2026.09.10-onemap-9-samples-grouped",
   "timezone": "Asia/Singapore",
   "destination": {
     "name": "Singapore University of Technology and Design",
@@ -22,7 +22,7 @@
     "minimum_successful_samples": 60,
     "minimum_successful_samples_by_provider": {
       "GOOGLE": 8,
-      "ONEMAP": 60
+      "ONEMAP": 8
     }
   },
   "providers": {
@@ -36,14 +36,23 @@
       "max_attempts": 5
     },
     "ONEMAP": {
+      "dates": ["2026-09-14", "2026-09-16", "2026-09-18"],
       "time_semantics": "DEPARTURE",
-      "times": ["06:20", "06:25", "06:30", "06:35", "06:40", "06:45", "06:50"],
+      "times": ["06:30", "06:45", "07:00"],
       "route_type": "pt",
       "mode": "TRANSIT",
       "max_walk_distance": 1000,
       "num_itineraries": 1,
       "requests_per_second": 4.0,
-      "max_attempts": 5
+      "max_attempts": 5,
+      "origin_grouping": {
+        "enabled": true,
+        "source": "ura_private_residential",
+        "residential_types": ["PRIVATE_NON_LANDED", "EXECUTIVE_CONDOMINIUM"],
+        "method": "URA_PROJECT_NAME_MEDOID",
+        "excluded_residential_types": ["PRIVATE_LANDED"],
+        "excluded_reason": "landed_home_excluded_from_scheduled_mapping"
+      }
     }
   },
   "google_sampling": {

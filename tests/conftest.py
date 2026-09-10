@@ -16,6 +16,8 @@ def test_config():
         "longitude": 103.9634,
     }
     config["experiment"]["dates"] = ["2026-09-14"]
+    config["providers"]["GOOGLE"]["dates"] = ["2026-09-14"]
+    config["providers"]["ONEMAP"]["dates"] = ["2026-09-14"]
     config["providers"]["GOOGLE"]["times"] = ["07:30"]
     config["providers"]["ONEMAP"]["times"] = ["06:20"]
     config["providers"]["GOOGLE"]["requests_per_second"] = 1000

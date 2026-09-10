@@ -5,8 +5,9 @@
 1. Set the SUTD coordinate in `config/project.json`.
 2. Copy `.env.example` to `.env` and set provider credentials. `ONEMAP_ACCESS_TOKEN` alone is sufficient for OneMap; email/password are optional refresh credentials.
 3. Import a reviewed residential source CSV, or build the HDB first-layer database with the resumable adapter.
-4. Run both providers against `--limit 1` or `--limit 10` and inspect the SQLite rows.
-5. Build the summary and static dataset.
+4. Classify named private developments and mark landed homes out of scheduled routing.
+5. Run both providers against `--limit 1` or `--limit 10` and inspect the SQLite rows.
+6. Build the summary and static dataset.
 
 ```powershell
 uv sync --extra dev
@@ -15,6 +16,8 @@ uv run python -m scripts.import_hdb --dry-run
 uv run python -m scripts.import_ura --dry-run
 uv run python -m scripts.finalize_addresses --confirm-production
 uv run python -m scripts.audit_addresses --require-complete --reject-fixtures
+uv run python -m scripts.classify_onemap_groups --dry-run
+uv run python -m scripts.classify_onemap_groups
 uv run python -m scripts.collect_onemap --limit 1
 uv run python -m scripts.collect_google --limit 1
 uv run python -m scripts.build_public_dataset
@@ -28,7 +31,7 @@ The dry run is intentionally non-billable and does not contact Google:
 uv run python -m scripts.collect_google --limit 10 --dry-run
 ```
 
-With a small fixture this reports the selected origins, planned route elements, matrix requests, and current budget usage without contacting Google. The completed production address dry run reported 94,334 origins, 86,309 Google-eligible origins after the 3.5 km exclusion, 1,000 selected origins, 9,000 planned elements, 108 matrix requests, and 9 previously used ledger events. That is a configuration and cost-safety check, not a live API credential check.
+With a small fixture this reports the selected origins, planned route elements, matrix requests, and current budget usage without contacting Google. The current scheduled-routing dry run reports 16,585 origins, 15,350 Google-eligible origins after the 3.5 km exclusion, 999 selected origins, 8,991 planned elements, 108 matrix requests, and 9 previously used ledger events. That is a configuration and cost-safety check, not a live API credential check.
 
 After importing the real residential source, run the smallest live checks before a nationwide collection:
 
@@ -37,7 +40,7 @@ uv run python -m scripts.collect_google --limit 1
 uv run python -m scripts.collect_onemap --limit 1
 ```
 
-The Google command makes 9 route elements across the configured three dates and arrival times (normally 9 matrix requests for one origin); OneMap makes 70 calls for one origin. Inspect the persisted rows and provider statuses before starting the full runs. Do not treat a successful dry run alone as evidence that nationwide collection can proceed.
+The Google command makes 9 route elements across the configured three dates and arrival times (normally 9 matrix requests for one origin); OneMap makes 9 calls for one routed origin across three dates and three departure times. Inspect the persisted rows and provider statuses before starting the full runs. Do not treat a successful dry run alone as evidence that nationwide collection can proceed.
 
 ## Duration estimates
 
@@ -45,18 +48,18 @@ Let `N` be the number of default-eligible residential origins (`VERIFIED` and `L
 
 At the current configured pacing of four OneMap requests per second (240/minute, below the documented 300 calls/minute tokenized-API ceiling):
 
-- OneMap requires `70 × N` route calls, so its pacing-only lower bound is approximately `70 × N` seconds. The completed production address database has `N = 94,334`, so the measured workload is `6,603,380` route calls and the pacing-only lower bound is 19 days 2 hours 34 minutes at four calls per second.
+- OneMap requires `9 × R` route calls in the adopted three-day/three-time configuration, where `R` is the routed-origin count after private-development grouping and landed-home exclusion. The completed production address database has `R = 16,585`, so the measured workload is `149,265` route calls and the pacing-only lower bound is about 10 hours 23 minutes at four calls per second.
 - Google requires `9 × S` route elements and `9 × ceil(S / 90)` matrix HTTP requests. At the default maximum `S = 1,000`, that is 9,000 elements and 108 matrix requests, or approximately 1 minute 48 seconds of pacing time before network latency and retries.
 
 Illustrative OneMap pacing-only bounds are:
 
 | Eligible origins | Route calls | Minimum pacing time |
 | ---: | ---: | ---: |
-| 100 | 7,000 | 1 h 57 min |
-| 500 | 35,000 | 9 h 43 min |
-| 1,000 | 70,000 | 19 h 27 min |
-| 5,000 | 350,000 | 4 d 1 h |
-| 10,000 | 700,000 | 8 d 2 h |
+| 100 | 300 | 1 min 15 sec |
+| 500 | 1,500 | 6 min 15 sec |
+| 1,000 | 3,000 | 12 min 30 sec |
+| 5,000 | 15,000 | 1 h 2 min 30 sec |
+| 10,000 | 30,000 | 2 h 5 min |
 
 These are lower bounds, not promises: HTTP latency, 429 responses, transient failures, and exponential backoff add time. Google retries are also counted in the persistent budget ledger; the configured 9,000-event guard can stop a run before retries exceed the cap. In that case, already successful rows remain safe and the remaining work can be resumed only with available budget or an explicit `--override-budget` decision.
 
@@ -64,15 +67,19 @@ The live Google smoke test used 9 ledger events. Therefore, after the HDB popula
 
 Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured four requests per second, 10,796 current HDB candidates require a pacing-only lower bound of about 45 minutes. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is imported locally from URA and does not consume OneMap geocoding calls.
 
-For the completed HDB+URA production population, the eventual OneMap route collection is `94,334 × 70 = 6,603,380` route calls, or 19 days 2 hours 34 minutes at four requests per second before latency, retries, and failures. This is an explicit multi-week operation; the repository does not start it as a side effect of address import or website build. Do not launch it without confirming that the OneMap quota, token lifetime/refresh plan, machine uptime, and fixed-date collection window are acceptable.
+For the completed HDB+URA production population, the adopted OneMap route collection is `16,585 × 9 = 149,265` route calls, or about 10 hours 23 minutes at four requests per second before latency, retries, and failures. This fits within a day at the pacing floor, but it still requires a fresh token, monitoring, and resumable checkpoints. The repository does not start it as a side effect of address import or website build. Run the dry run immediately before launch and keep the fixed-date collection window available for the full operation.
 
-OneMap access tokens are normally valid for three days. A token-only `.env` therefore cannot sustain this multi-week run by itself. Before the first experiment date and whenever the token expires, replace `ONEMAP_ACCESS_TOKEN` and rerun the same collector command; successful observations are skipped and only missing jobs are attempted. The collector now stops immediately on authentication failure without converting the remaining jobs into terminal `FAILED` rows. Email/password refresh is supported when the account flow permits it, but do not assume it is unattended if an email confirmation code is required.
+OneMap access tokens are normally valid for three days. A fresh token covers the pacing floor for this reduced workload, but refresh it immediately before launch. The currently loaded token expires before the first experiment date and must be replaced before launch. If authentication fails, replace `ONEMAP_ACCESS_TOKEN` and rerun the same collector command; successful observations are skipped and only missing jobs are attempted. The collector stops immediately on authentication failure without converting the remaining jobs into terminal `FAILED` rows. Email/password refresh is supported when the account flow permits it, but do not assume it is unattended if an email confirmation code is required.
+
+## Landed and unknown postcode fallback
+
+The address index retains landed-home postcodes, but the scheduled OneMap population excludes them. The default GitHub Pages build displays these as known-but-unmapped. The frontend has an optional build-time hook: copy `website/.env.example` to `website/.env` and set `VITE_LIVE_ROUTE_ENDPOINT` to a server-side proxy that accepts `POST {"postal_code":"123456"}` and returns the complete `PostcodeSummary` JSON shape. Do not put `ONEMAP_ACCESS_TOKEN`, `GOOGLE_MAPS_API_KEY`, or any provider credential in `website/.env`; the proxy, not browser JavaScript, owns credentials and quota controls.
 
 ## Parallelism and the one-day constraint
 
 The official [OneMap routing endpoint](https://www.onemap.gov.sg/apidocs/routing) documents one `start` and one `end` coordinate per request. `numItineraries` controls how many alternatives one origin request returns; it is not a multi-origin batch facility. The routing documentation also lists HTTP 429 for quota exhaustion. OneMap's [current workshop material](https://www.onemap.gov.sg/apidocs/static/media/OneMap_API_Workshop_Presentation_260825.04f72136081dd249c5ee.pdf) states a 300-calls-per-minute limit for token-based APIs. The project therefore uses one aggregate limiter at four calls per second (240/minute). Multiple terminal sessions with independent limiters would only create 429s; sharding is useful for restartability or for an explicitly approved higher quota, not for bypassing the documented allowance.
 
-For the completed 94,334-origin database, the 70-observation design requires 6,603,380 calls. At the documented 300/minute ceiling, the theoretical minimum is about 15.3 days; completing it in 24 hours would require about 4,586 calls/minute, before retries. Excluding the 3.5 km radius removes only 8,025 origins and still leaves 6,041,630 calls (about 14.0 days at 300/minute).
+For comparison, the original 70-observation design would require 6,603,380 calls. At the documented 300/minute ceiling, the theoretical minimum is about 15.3 days; completing it in 24 hours would require about 4,586 calls/minute. That is why the adopted configuration reduces temporal samples while retaining every origin.
 
 The local feasibility analysis below uses a deterministic greedy representative: every postcode is assigned to a representative within the stated radius, and the representative is routed for all 70 observations. It is an estimate, not yet a production clustering rule, and does not prove that nearby postcodes have identical public-transport routes.
 
@@ -84,7 +91,7 @@ The local feasibility analysis below uses a deterministic greedy representative:
 | ≤100 m representative radius | 7,333 | 513,310 | 1.49 d | 1.19 d |
 | ≤150 m representative radius | 4,036 | 282,520 | 0.82 d | 0.65 d |
 
-This shows that 20–30 m clustering does not meet a one-day target. The 100 m option is still slightly over a day even at 300/minute, while 150 m is coarse enough to risk assigning different walking access points or transit choices the same route. If one day is non-negotiable, the least geographically distorting option is to keep every origin and reduce the temporal sample count to roughly four observations per origin at the current 240/minute setting (or five at 300/minute with almost no headroom). That is a methodology change and must be versioned in `config/project.json`; it should not be silently substituted for the 70-observation experiment.
+This shows that 20–30 m clustering does not meet a one-day target. The 100 m option is still slightly over a day even at 300/minute, while 150 m is coarse enough to risk assigning different walking access points or transit choices the same route. The adopted plan therefore keeps every origin and versions the temporal reduction explicitly in `config/project.json`.
 
 ## Resuming
 

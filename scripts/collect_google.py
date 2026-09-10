@@ -14,7 +14,7 @@ from commute.config import (
     load_environment,
     resolve_path,
 )
-from commute.db import google_usage_events, init_addresses_db, init_observations_db, iter_addresses
+from commute.db import google_usage_events, init_addresses_db, init_observations_db, iter_onemap_origins
 from commute.providers.google import GoogleRoutesClient
 from commute.runners import collect_google, estimate_google_requests, pending_google_events
 from commute.sampling import prepare_google_population
@@ -53,7 +53,9 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigError("GOOGLE_MAPS_API_KEY is not set in .env")
         address_connection = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
         rows = list(
-            iter_addresses(address_connection, config["addresses"]["include_confidence"], None, args.postal_code)
+            iter_onemap_origins(
+                address_connection, config["addresses"]["include_confidence"], None, args.postal_code
+            )
         )
         if not rows:
             print("No matching residential addresses found.", file=sys.stderr)

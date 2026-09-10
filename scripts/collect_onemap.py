@@ -14,7 +14,7 @@ from commute.config import (
     load_environment,
     resolve_path,
 )
-from commute.db import init_addresses_db, init_observations_db, iter_addresses
+from commute.db import init_addresses_db, init_observations_db, iter_onemap_origins
 from commute.providers.onemap import OneMapClient, token_expiry
 from commute.runners import collect_onemap
 
@@ -44,7 +44,9 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigError("Set ONEMAP_ACCESS_TOKEN, or set both ONEMAP_EMAIL and ONEMAP_PASSWORD, in .env")
         address_connection = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
         rows = list(
-            iter_addresses(address_connection, config["addresses"]["include_confidence"], args.limit, args.postal_code)
+            iter_onemap_origins(
+                address_connection, config["addresses"]["include_confidence"], args.limit, args.postal_code
+            )
         )
         if not rows:
             print("No matching residential addresses found.", file=sys.stderr)

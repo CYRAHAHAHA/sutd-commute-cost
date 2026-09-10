@@ -36,9 +36,9 @@ def test_google_collector_skips_success_on_resume(test_config, tmp_path):
     connection = init_observations_db(tmp_path / "obs.sqlite")
     client = FakeGoogle()
     first = collect_google(rows, test_config, connection, client, sleep=lambda _: None)
-    assert first["success"] == 3 and client.calls == 3
+    assert first["success"] == 1 and client.calls == 1
     second = collect_google(rows, test_config, connection, client, sleep=lambda _: None)
-    assert second["skipped"] == 3 and client.calls == 3
+    assert second["skipped"] == 1 and client.calls == 1
 
 
 def test_onemap_collector_persists_a_success(test_config, tmp_path):

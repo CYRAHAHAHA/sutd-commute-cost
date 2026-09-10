@@ -39,15 +39,36 @@ def test_provider_sampling_timestamps_are_explicit():
         "07:45",
         "08:00",
     ]
-    assert [item[1] for item in query_datetimes(config, "ONEMAP")][:7] == [
-        "06:20",
-        "06:25",
+    assert [item[1] for item in query_datetimes(config, "ONEMAP")] == [
         "06:30",
-        "06:35",
-        "06:40",
         "06:45",
-        "06:50",
+        "07:00",
+        "06:30",
+        "06:45",
+        "07:00",
+        "06:30",
+        "06:45",
+        "07:00",
     ]
+    assert [item[0] for item in query_datetimes(config, "ONEMAP")] == [
+        "2026-09-14",
+        "2026-09-14",
+        "2026-09-14",
+        "2026-09-16",
+        "2026-09-16",
+        "2026-09-16",
+        "2026-09-18",
+        "2026-09-18",
+        "2026-09-18",
+    ]
+
+
+def test_current_onemap_config_has_nine_jobs_per_origin():
+    from commute.config import expected_samples, load_config, minimum_successful_samples
+
+    config = load_config()
+    assert expected_samples(config, "ONEMAP") == 9
+    assert minimum_successful_samples(config, "ONEMAP") == 8
 
 
 def test_configured_provider_jobs_have_expected_cardinality(test_config):

@@ -18,6 +18,11 @@ type PostcodeSummary = {
   google_exclusion_reason: string | null;
   google_stratum: string | null;
   google_sample_selected: boolean;
+  onemap_group_key: string | null;
+  onemap_group_representative: string | null;
+  onemap_group_size: number | null;
+  onemap_observation_mode: string;
+  onemap_exclusion_reason: string | null;
   google: ProviderSummary;
   onemap: ProviderSummary;
   combined: { status: string; mean_seconds: number | null };
@@ -28,6 +33,18 @@ type Summary = {
   generated_at: string;
   minimum_successful_samples: Record<string, number>;
   postcodes: Record<string, PostcodeSummary>;
+};
+
+type CompactSummary = {
+  dataset_version: string;
+  generated_at: string;
+  minimum_successful_samples: Record<string, number>;
+  postcodes: Array<[
+    string, number, number,
+    [string, number | null, number | null, number | null, number | null, number, number],
+    [string, number | null, number | null, number | null, number | null, number, number],
+    [string, number | null], string | null, number | null, string | null
+  ]>;
 };
 
 type Methodology = {
@@ -43,15 +60,62 @@ type Methodology = {
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const dataUrl = (name: string) => new URL(`data/${name}`, document.baseURI).toString();
+const liveRouteEndpoint = import.meta.env.VITE_LIVE_ROUTE_ENDPOINT?.trim() || null;
 
 const minutes = (seconds: number | null): string => seconds === null ? "—" : `${Math.round(seconds / 60)} min`;
 const detailMinutes = (seconds: number | null): string => seconds === null ? "—" : `${(seconds / 60).toFixed(1)} min`;
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-SG", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Singapore" }).format(new Date(`${value}T00:00:00+08:00`));
 
-function providerDetails(name: string, summary: ProviderSummary, methodology: Methodology): string {
+function decodeProvider(row: CompactSummary["postcodes"][number][3]): ProviderSummary {
+  const [status, mean, median, min, max, successful_samples, expected_samples] = row;
+  return {
+    status: status === "S" ? "SUCCESS" : status === "X" ? "EXCLUDED" : "INSUFFICIENT_DATA",
+    mean_seconds: mean,
+    median_seconds: median,
+    min_seconds: min,
+    max_seconds: max,
+    successful_samples,
+    expected_samples,
+  };
+}
+
+function decodeSummary(compact: CompactSummary): Summary {
+  const postcodes: Record<string, PostcodeSummary> = {};
+  for (const [postal_code, latitude, longitude, google, onemap, combined, representative, group_size, exclusion_code] of compact.postcodes) {
+    postcodes[postal_code] = {
+      postal_code,
+      latitude,
+      longitude,
+      distance_to_sutd_km: null,
+      google_exclusion_reason: google[0] === "X" ? "within_3.5km_of_sutd" : null,
+      google_stratum: null,
+      google_sample_selected: false,
+      onemap_group_key: null,
+      onemap_group_representative: representative,
+      onemap_group_size: group_size,
+      onemap_observation_mode: representative && representative !== postal_code ? "REPRESENTATIVE" : "DIRECT",
+      onemap_exclusion_reason: exclusion_code === "L" ? "landed_home_excluded_from_scheduled_mapping" : null,
+      google: decodeProvider(google),
+      onemap: decodeProvider(onemap),
+      combined: { status: combined[0] === "S" ? "SUCCESS" : "INSUFFICIENT_DATA", mean_seconds: combined[1] },
+    };
+  }
+  return {
+    dataset_version: compact.dataset_version,
+    generated_at: compact.generated_at,
+    minimum_successful_samples: compact.minimum_successful_samples,
+    postcodes,
+  };
+}
+
+function providerDetails(name: string, summary: ProviderSummary, methodology: Methodology, exclusionReason: string | null = null): string {
   const spec = methodology.providers[name];
   const range = summary.min_seconds === null ? "—" : `${detailMinutes(summary.min_seconds)} – ${detailMinutes(summary.max_seconds)}`;
-  const exclusion = summary.status === "EXCLUDED" ? `<p class="warning">Google validation excludes this postcode because it is within the configured ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km SUTD radius.</p>` : "";
+  const exclusion = summary.status === "EXCLUDED"
+    ? name === "GOOGLE" && exclusionReason === "within_3.5km_of_sutd"
+      ? `<p class="warning">Google validation excludes this postcode because it is within the configured ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km SUTD radius.</p>`
+      : `<p class="warning">${name === "GOOGLE" ? "Google validation excludes this retained landed-home record." : "OneMap scheduled coverage excludes this retained landed-home record."}</p>`
+    : "";
   return `
     <div class="provider-detail">
       <div class="detail-heading"><span>${name === "GOOGLE" ? "Google Maps" : "OneMap"}</span><span>${summary.successful_samples} / ${summary.expected_samples} successful</span></div>
@@ -68,6 +132,12 @@ function providerDetails(name: string, summary: ProviderSummary, methodology: Me
 function renderResult(record: PostcodeSummary, methodology: Methodology): string {
   const hasCombined = record.combined.status === "SUCCESS" && record.combined.mean_seconds !== null;
   const oneWay = hasCombined ? Math.round((record.combined.mean_seconds as number) / 60) : null;
+  const googleExcludedForRadius = record.google_exclusion_reason === "within_3.5km_of_sutd";
+  const coverageWarning = record.onemap_exclusion_reason
+    ? "This postcode is known, but landed homes are excluded from scheduled OneMap mapping."
+    : googleExcludedForRadius
+      ? `Google validation is intentionally excluded within ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km of SUTD. OneMap remains the coverage layer for this postcode.`
+      : `This postcode is known, but both provider estimates need at least ${methodology.minimum_successful_samples.GOOGLE} Google and ${methodology.minimum_successful_samples.ONEMAP} OneMap successful samples before a combined estimate is shown.`;
   return `
     <section class="result-card" aria-live="polite">
       <div class="result-kicker">${hasCombined ? "Your estimate" : record.google_exclusion_reason ? "OneMap coverage only" : "Not enough observations yet"}</div>
@@ -78,10 +148,12 @@ function renderResult(record: PostcodeSummary, methodology: Methodology): string
         <div><span>OneMap</span><strong>${minutes(record.onemap.mean_seconds)}</strong></div>
         <div class="combined-row"><span>Combined</span><strong>${minutes(record.combined.mean_seconds)}</strong></div>
       </div>
-      ${hasCombined ? `<p class="extrapolation">≈ ${oneWay! * 2} minutes commuting per school day<br /><span>≈ ${((oneWay! * 2 * 5) / 60).toFixed(1)} hours over a 5-day week</span><small>Simple round-trip extrapolation, not another route calculation.</small></p>` : record.google_exclusion_reason ? `<p class="warning">Google validation is intentionally excluded within ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km of SUTD. OneMap remains the coverage layer for this postcode.</p>` : `<p class="warning">This postcode is known, but both provider estimates need at least ${methodology.minimum_successful_samples.GOOGLE} Google and ${methodology.minimum_successful_samples.ONEMAP} OneMap successful samples before a combined estimate is shown.</p>`}
+      ${hasCombined ? `<p class="extrapolation">≈ ${oneWay! * 2} minutes commuting per school day<br /><span>≈ ${((oneWay! * 2 * 5) / 60).toFixed(1)} hours over a 5-day week</span><small>Simple round-trip extrapolation, not another route calculation.</small></p>` : `<p class="warning">${coverageWarning}</p>`}
+      ${record.onemap_observation_mode === "REPRESENTATIVE" ? `<p class="note">OneMap uses the representative point for this named development (${record.onemap_group_representative}); the same measured route is assigned to its ${record.onemap_group_size} mapped postal points.</p>` : ""}
+      ${record.onemap_exclusion_reason ? `<p class="warning">This residential record is retained in the address index, but landed homes are excluded from scheduled OneMap mapping. A live calculation is not enabled on this static site because provider credentials must not be shipped to the browser.</p>` : ""}
       <details class="methodology-detail">
         <summary>How was this calculated?</summary>
-        ${providerDetails("GOOGLE", record.google, methodology)}
+        ${providerDetails("GOOGLE", record.google, methodology, record.google_exclusion_reason)}
         ${providerDetails("ONEMAP", record.onemap, methodology)}
         <div class="provider-detail combined-detail"><div class="detail-heading"><span>Combined</span><span>equal weight</span></div><p>Combined = (Google mean + OneMap mean) / 2. Google and OneMap use different routing systems and different time-query capabilities, so their estimates may differ. Both are shown rather than hiding this disagreement.</p></div>
         <p class="note">The public build contains compact postcode summaries. Raw observations remain in the local SQLite databases and can be exported for inspection where provider licensing permits.</p>
@@ -92,14 +164,16 @@ function renderResult(record: PostcodeSummary, methodology: Methodology): string
 function renderMethodology(methodology: Methodology): string {
   const google = methodology.providers.GOOGLE;
   const onemap = methodology.providers.ONEMAP;
+  const googleTimes = google.times.join(", ");
+  const onemapTimes = onemap.times.join(", ");
   return `
     <section class="methodology-panel">
       <div class="section-eyebrow">The experiment</div>
       <h2>Transparent by design.</h2>
-      <p>Every result is generated ahead of time. The website never calls a routing API and collects no visitor data.</p>
+      <p>Every result is generated ahead of time. The default site never calls a routing API and collects no visitor data. An optional live fallback can call a separately deployed server-side proxy.</p>
       <div class="methodology-columns">
-        <div><h3>Google Maps</h3><p><strong>Validation layer.</strong> Three arrival targets from ${google.times[0]} to ${google.times.at(-1)} at fifteen-minute intervals, across ${google.dates.length} weekdays. ${google.expected_samples} expected observations per sampled postcode. Origins within ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km of SUTD are retained but excluded from Google.</p></div>
-        <div><h3>OneMap</h3><p><strong>Coverage layer.</strong> Seven departure times from ${onemap.times[0]} to ${onemap.times.at(-1)} at five-minute intervals, across ${onemap.dates.length} weekdays. ${onemap.expected_samples} expected observations per postcode.</p></div>
+        <div><h3>Google Maps</h3><p><strong>Validation layer.</strong> Arrival targets ${googleTimes}, across ${google.dates.length} weekdays. ${google.expected_samples} expected observations per sampled postcode. Origins within ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km of SUTD are retained but excluded from Google.</p></div>
+        <div><h3>OneMap</h3><p><strong>Coverage layer.</strong> Departure sample ${onemapTimes}, across ${onemap.dates.length} weekdays. ${onemap.expected_samples} expected observations per postcode.</p></div>
       </div>
       <p class="dates">Collection dates: ${methodology.collection_dates.map(formatDate).join(" · ")}</p>
       <p class="fine-print">All times are Singapore Time (${methodology.timezone}). Minimum coverage: ${methodology.minimum_successful_samples.GOOGLE} / ${google.expected_samples} Google; ${methodology.minimum_successful_samples.ONEMAP} / ${onemap.expected_samples} OneMap. Dataset ${methodology.dataset_version}.</p>
@@ -131,7 +205,7 @@ function render(summary: Summary, methodology: Methodology): void {
   const input = document.querySelector<HTMLInputElement>("#postal-code")!;
   const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
   const result = document.querySelector<HTMLDivElement>("#result")!;
-  form.addEventListener("submit", (event) => {
+  form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const postal = input.value.trim();
     if (!/^\d{6}$/.test(postal)) {
@@ -140,14 +214,37 @@ function render(summary: Summary, methodology: Methodology): void {
       result.innerHTML = "";
       return;
     }
-    const record = summary.postcodes[postal];
+    let record = summary.postcodes[postal];
+    const needsLiveLookup = !record || Boolean(record.onemap_exclusion_reason);
+    if (needsLiveLookup && liveRouteEndpoint) {
+      message.textContent = "Requesting a live estimate…";
+      message.className = "form-message";
+      try {
+        const response = await fetch(liveRouteEndpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ postal_code: postal }),
+        });
+        if (!response.ok) throw new Error(`Live lookup failed: ${response.status}`);
+        record = await response.json() as PostcodeSummary;
+      } catch {
+        message.textContent = "The live estimate could not be retrieved. Try again later.";
+        message.className = "form-message error";
+        result.innerHTML = "";
+        return;
+      }
+    }
     if (!record) {
-      message.textContent = "That postcode is not in the residential dataset.";
+      message.textContent = liveRouteEndpoint
+        ? "That postcode is not available from the live lookup service."
+        : "That postcode is not precomputed. Live lookup is not enabled on this static site.";
       message.className = "form-message error";
       result.innerHTML = "";
       return;
     }
-    message.textContent = "Found in the residential dataset.";
+    message.textContent = liveRouteEndpoint && needsLiveLookup
+      ? "Live estimate returned."
+      : "Found in the residential dataset.";
     message.className = "form-message success";
     result.innerHTML = renderResult(record, methodology);
     result.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -155,8 +252,8 @@ function render(summary: Summary, methodology: Methodology): void {
 }
 
 Promise.all([
-  fetch(dataUrl("commute-summary.json")).then(response => response.json() as Promise<Summary>),
+  fetch(dataUrl("commute-summary.json")).then(response => response.json() as Promise<CompactSummary>),
   fetch(dataUrl("methodology.json")).then(response => response.json() as Promise<Methodology>),
-]).then(([summary, methodology]) => render(summary, methodology)).catch(() => {
+]).then(([summary, methodology]) => render(decodeSummary(summary), methodology)).catch(() => {
   app.innerHTML = `<main><section class="hero"><div class="hero-copy"><div class="eyebrow">Dataset unavailable</div><h1>The static commute dataset could not be loaded.</h1><p class="lede">Run <code>uv run python -m scripts.build_public_dataset</code> and rebuild the website.</p></div></section></main>`;
 });

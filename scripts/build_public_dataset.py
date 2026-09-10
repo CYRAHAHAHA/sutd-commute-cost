@@ -14,6 +14,71 @@ from commute.config import (
 )
 from scripts.build_summary import build_summary
 
+STATUS_CODES = {"SUCCESS": "S", "INSUFFICIENT_DATA": "I", "EXCLUDED": "X"}
+
+
+def _compact_provider(provider: dict) -> list:
+    return [
+        STATUS_CODES[provider["status"]],
+        provider["mean_seconds"],
+        provider["median_seconds"],
+        provider["min_seconds"],
+        provider["max_seconds"],
+        provider["successful_samples"],
+        provider["expected_samples"],
+    ]
+
+
+def compact_summary(summary: dict) -> dict:
+    """Create a compact row-oriented artifact instead of repeating JSON field names 94k times."""
+    rows = []
+    exclusion_codes = {"landed_home_excluded_from_scheduled_mapping": "L"}
+    for postal_code, record in summary["postcodes"].items():
+        exclusion_reason = record.get("onemap_exclusion_reason")
+        rows.append(
+            [
+                postal_code,
+                round(record["latitude"], 6),
+                round(record["longitude"], 6),
+                _compact_provider(record["google"]),
+                _compact_provider(record["onemap"]),
+                [STATUS_CODES[record["combined"]["status"]], record["combined"]["mean_seconds"]],
+                record.get("onemap_group_representative"),
+                record.get("onemap_group_size"),
+                exclusion_codes.get(exclusion_reason),
+            ]
+        )
+    return {
+        "dataset_version": summary["dataset_version"],
+        "generated_at": summary["generated_at"],
+        "minimum_successful_samples": summary["minimum_successful_samples"],
+        "format": {
+            "postcodes_row": [
+                "postal_code",
+                "latitude",
+                "longitude",
+                "google",
+                "onemap",
+                "combined",
+                "onemap_group_representative",
+                "onemap_group_size",
+                "onemap_exclusion_code",
+            ],
+            "provider_row": [
+                "status_code",
+                "mean_seconds",
+                "median_seconds",
+                "min_seconds",
+                "max_seconds",
+                "successful_samples",
+                "expected_samples",
+            ],
+            "status_codes": {"S": "SUCCESS", "I": "INSUFFICIENT_DATA", "X": "EXCLUDED"},
+            "onemap_exclusion_codes": {"L": "landed_home_excluded_from_scheduled_mapping"},
+        },
+        "postcodes": rows,
+    }
+
 
 def build_public_dataset(config: dict) -> tuple[Path, Path]:
     summary = build_summary(config)
@@ -21,7 +86,7 @@ def build_public_dataset(config: dict) -> tuple[Path, Path]:
     website_data = resolve_path(config, "website/data")
     website_data.mkdir(parents=True, exist_ok=True)
     public_path = website_data / "commute-summary.json"
-    public_path.write_text(json.dumps(summary, separators=(",", ":")) + "\n", encoding="utf-8")
+    public_path.write_text(json.dumps(compact_summary(summary), separators=(",", ":")) + "\n", encoding="utf-8")
     methodology = {
         "dataset_version": config.get("dataset_version"),
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -45,6 +110,7 @@ def build_public_dataset(config: dict) -> tuple[Path, Path]:
                 "dates": spec.get("dates", config["experiment"]["dates"]),
                 "expected_samples": expected_samples(config, provider),
                 "travel_mode": spec.get("travel_mode", spec.get("mode")),
+                "origin_grouping": spec.get("origin_grouping"),
             }
             for provider, spec in config["providers"].items()
         },
