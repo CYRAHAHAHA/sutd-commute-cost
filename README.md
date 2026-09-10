@@ -96,6 +96,7 @@ Import the official URA private-residential GeoJSON into the same postal lookup 
 ```powershell
 uv run python -m scripts.import_ura --dry-run
 uv run python -m scripts.import_ura
+uv run python -m scripts.audit_addresses --require-complete --reject-fixtures
 ```
 
 The URA adapter covers landed, non-landed, and executive-condominium points, deduplicates by postal code, and retains an existing HDB record when the two official layers overlap.
