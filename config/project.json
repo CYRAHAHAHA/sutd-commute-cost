@@ -3,8 +3,8 @@
   "timezone": "Asia/Singapore",
   "destination": {
     "name": "Singapore University of Technology and Design",
-    "latitude": null,
-    "longitude": null
+    "latitude": 1.340650,
+    "longitude": 103.962374
   },
   "experiment": {
     "dates": [

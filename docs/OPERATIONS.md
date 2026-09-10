@@ -16,6 +16,25 @@ uv run python -m scripts.collect_google --limit 1
 uv run python -m scripts.build_public_dataset
 ```
 
+## Google preflight
+
+The dry run is intentionally non-billable and does not contact Google:
+
+```powershell
+uv run python -m scripts.collect_google --limit 10 --dry-run
+```
+
+With the current three-row fixture this reports 3 eligible origins, 27 planned route elements, 9 matrix HTTP requests, and 0 of the 9,000 configured Google budget events used. That is a successful local configuration and cost-safety check, but it is not a live API credential check.
+
+After importing the real residential source, run the smallest live checks before a nationwide collection:
+
+```powershell
+uv run python -m scripts.collect_google --limit 1
+uv run python -m scripts.collect_onemap --limit 1
+```
+
+The Google command makes 9 route elements across the configured three dates and arrival times (normally 9 matrix requests for one origin); OneMap makes 70 calls for one origin. Inspect the persisted rows and provider statuses before starting the full runs. Do not treat a successful dry run alone as evidence that nationwide collection can proceed.
+
 ## Resuming
 
 Collectors generate the same deterministic job keys every time. A `SUCCESS` row is skipped. A failed row is eligible to run again, and each new result is persisted immediately. The database uses a unique constraint to make retries idempotent.

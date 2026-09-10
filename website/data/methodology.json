@@ -1,6 +1,6 @@
 {
   "dataset_version": "2026.09.10",
-  "generated_at": "2026-09-10T12:26:05.402731Z",
+  "generated_at": "2026-09-10T12:35:51.636852Z",
   "timezone": "Asia/Singapore",
   "collection_dates": [
     "2026-09-14",
@@ -16,8 +16,8 @@
   ],
   "destination": {
     "name": "Singapore University of Technology and Design",
-    "latitude": null,
-    "longitude": null
+    "latitude": 1.34065,
+    "longitude": 103.962374
   },
   "minimum_successful_samples": {
     "GOOGLE": 8,

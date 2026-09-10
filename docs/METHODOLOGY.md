@@ -30,7 +30,11 @@ Google uses Routes API Compute Route Matrix with `travelMode=TRANSIT` and the co
 
 That is 9 observations per sampled origin. The request uses `arrivalTime` in RFC 3339 form. Transit matrices are limited to 100 route elements, so the implementation uses a conservative batch size of 90 origins and a single destination.
 
+The implementation uses the standard Google Routes API service at `routes.googleapis.com`, specifically `ComputeRouteMatrix`, rather than Routes Preferred API. The request body sets `travelMode=TRANSIT`, `arrivalTime`, and the fixed SUTD latitude/longitude; the response field mask requests only origin index, destination index, status, condition, and duration. Google’s current [ComputeRouteMatrix reference](https://developers.google.com/maps/documentation/routes/reference/rest/v2/TopLevel/computeRouteMatrix) documents both `arrivalTime` for transit and the 100-element transit limit.
+
 The 9-observation design deliberately uses only the first experiment week's Monday, Wednesday, and Friday. If the configured Google date list is expanded to include the second week, expected observations and the budget calculation expand automatically.
+
+Google transit queries accept an arrival or departure timestamp only within the documented window of up to 7 days in the past or 100 days in the future relative to execution. The fixed September 2026 dates must therefore be collected during that window; the [transit route documentation](https://developers.google.com/maps/documentation/routes/transit-route) also cautions that transit predictions can change over time.
 
 Before sampling, every address is annotated with its haversine distance to SUTD. Origins at or within `google_sampling.exclusion_radius_km` are retained in SQLite and public summaries with `google_exclusion_reason=within_3.5km_of_sutd` at the default radius, but receive no Google jobs.
 

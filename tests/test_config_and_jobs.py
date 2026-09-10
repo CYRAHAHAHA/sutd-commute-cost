@@ -75,6 +75,8 @@ def test_destination_coordinates_are_required_for_collection():
     from commute.config import load_config
 
     config = load_config()
+    config["destination"]["latitude"] = None
+    config["destination"]["longitude"] = None
     with pytest.raises(ConfigError, match="coordinates are not configured"):
         destination(config, require_coordinates=True)
 

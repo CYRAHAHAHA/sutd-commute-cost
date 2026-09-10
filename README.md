@@ -6,7 +6,7 @@ The public site never calls Google Maps or OneMap. It reads generated JSON, so v
 
 ## Current status
 
-The repository is fully implemented and tested, with a three-row residential fixture for smoke tests. The production experiment intentionally has no destination coordinate yet: enter the exact SUTD latitude and longitude in [config/project.json](config/project.json). Add credentials to a local `.env` only when you are ready to collect routes.
+The repository is fully implemented and tested, with a three-row residential fixture for smoke tests. The SUTD destination is configured in [config/project.json](config/project.json), and provider credentials belong only in the ignored local `.env`. The nationwide residential import and live route collection are still explicit operator steps.
 
 ## Methodology
 
@@ -15,6 +15,7 @@ The experiment definition is version-controlled in `config/project.json`.
 - OneMap is the coverage layer: public transport, **leave at** seven times from 06:20 through 06:50 at five-minute intervals, across all ten weekdays 14–25 September 2026. That is 70 expected observations per eligible postcode.
 - Google Maps is the validation layer: public transit, **arrive by** 07:30, 07:45, and 08:00 on the first experiment week's Monday/Wednesday/Friday (14, 16, and 18 September 2026). That is 9 expected observations per sampled postcode.
 - The Google 9-observation design intentionally uses the first week's Monday/Wednesday/Friday; changing the configured Google date list automatically changes expected observations and budget calculations.
+- The collector uses the normal Google Routes API service (`routes.googleapis.com`) and `ComputeRouteMatrix`, not Routes Preferred API. Google’s current reference supports `travelMode=TRANSIT` with `arrivalTime`; the implementation sends one fixed coordinate destination, a required response field mask, and batches conservatively below the 100-element transit limit.
 - Residential origins within the configurable 3.5 km straight-line SUTD radius remain in the dataset but are marked `google_exclusion_reason=within_3.5km_of_sutd` and excluded from Google validation.
 - Google samples up to 1,000 remaining origins using reproducible proportional geographic strata and a fixed seed: 1,000 × 9 = 9,000 planned billable events. A hard budget guard blocks additional Google events beyond the configured 9,000 unless `--override-budget` is explicit. Google currently lists a 10,000-event free usage cap for Compute Routes Essentials and Compute Route Matrix Essentials; verify the [current pricing page](https://developers.google.com/maps/billing-and-pricing/pricing) before each monthly run.
 - Provider averages use successful durations only. A provider needs at least 8 / 9 Google or 60 / 70 OneMap successful samples. The combined estimate is `(Google mean + OneMap mean) / 2`, and is produced only when both provider estimates meet the threshold.
@@ -132,6 +133,8 @@ npm run build
 ```
 
 Unit tests mock provider HTTP responses. Real provider calls are intentionally separate from the normal test suite; use the scoped collection commands above for explicit integration checks after configuring credentials.
+
+The Google dry run has been completed against the three-row fixture: 3 eligible origins, 27 planned route elements, 9 planned matrix requests, and 0 budget events used. This confirms local configuration, sampling, exclusion, resumability inputs, and budget accounting; it does not confirm live credentials because `--dry-run` makes no network calls.
 
 ## GitHub Pages
 
