@@ -81,6 +81,16 @@ uv run python -m scripts.discover_addresses --input path/to/private_residential.
 
 The source adapter preserves provenance and deduplicates by six-digit postal code in `data/residential_addresses.sqlite`. Do not brute-force all 000000–999999 values. Start with authoritative HDB/building sources, then add clearly identified private condominium/apartment/landed/mixed-use sources.
 
+For the official HDB starting population, download the current HDB Property Information CSV from data.gov.sg into `data/input/HDBPropertyInformation.csv`, then run the resumable OneMap resolver:
+
+```powershell
+uv run python -m scripts.import_hdb --dry-run
+uv run python -m scripts.import_hdb --limit 10
+uv run python -m scripts.import_hdb
+```
+
+The adapter filters the source's explicit `residential=Y` rows, searches OneMap using the exact block and street, verifies the returned block/street, and persists a checkpoint for every source record. It does not use an unsafe block-number-only join. HDB is the authoritative first layer; private residential sources still need separate reviewed adapters before claiming complete Singapore-wide coverage.
+
 ## Safe collection commands
 
 The repository refuses an unscoped collection. For OneMap, `--limit` caps origins. For Google, `--limit` caps the reproducibly selected validation sample; the full eligible population is still used to allocate geographic strata. OneMap has 70 jobs per origin; Google has 9.

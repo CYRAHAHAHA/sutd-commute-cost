@@ -53,7 +53,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.dry_run:
             return 0
         observation_connection = init_observations_db(resolve_path(config, config["observations_database"]))
-        client = OneMapClient(email, password, access_token=access_token)
+        client = OneMapClient(
+            email,
+            password,
+            base_url=credential("ONEMAP_BASE_URL") or "https://www.onemap.gov.sg",
+            access_token=access_token,
+        )
         collect_onemap(rows, config, observation_connection, client)
         return 0
     except (ConfigError, ProviderError, ValueError) as exc:

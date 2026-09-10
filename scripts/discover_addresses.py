@@ -41,7 +41,12 @@ def main(argv: list[str] | None = None) -> int:
                 raise ConfigError(
                     "--resolve-missing requires ONEMAP_ACCESS_TOKEN, or both ONEMAP_EMAIL and ONEMAP_PASSWORD, in .env"
                 )
-            client = OneMapClient(email, password, access_token=access_token)
+            client = OneMapClient(
+                email,
+                password,
+                base_url=credential("ONEMAP_BASE_URL") or "https://www.onemap.gov.sg",
+                access_token=access_token,
+            )
         resolved = [resolve_with_onemap(row, client) if client else row for row in source_rows]
         counts: dict[str, int] = {}
         for row in resolved:

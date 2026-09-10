@@ -32,6 +32,21 @@ CREATE TABLE IF NOT EXISTS residential_address (
     google_sample_seed INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_residential_confidence ON residential_address(confidence);
+CREATE TABLE IF NOT EXISTS address_resolution (
+    source TEXT NOT NULL,
+    source_identifier TEXT NOT NULL,
+    search_value TEXT NOT NULL,
+    postal_code TEXT,
+    latitude REAL,
+    longitude REAL,
+    status TEXT NOT NULL CHECK (status IN ('SUCCESS', 'FAILED')),
+    error_code TEXT,
+    error_message TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    resolved_at TEXT NOT NULL,
+    PRIMARY KEY (source, source_identifier)
+);
+CREATE INDEX IF NOT EXISTS idx_address_resolution_status ON address_resolution(source, status);
 """
 
 OBSERVATION_SCHEMA = """
@@ -134,6 +149,65 @@ def upsert_address(connection: sqlite3.Connection, address: Address, discovered_
             discovered_at,
         ),
     )
+
+
+def get_address_resolution(
+    connection: sqlite3.Connection, source: str, source_identifier: str
+) -> sqlite3.Row | None:
+    return connection.execute(
+        """
+        SELECT * FROM address_resolution
+        WHERE source=? AND source_identifier=?
+        """,
+        (source, source_identifier),
+    ).fetchone()
+
+
+def save_address_resolution(
+    connection: sqlite3.Connection,
+    *,
+    source: str,
+    source_identifier: str,
+    search_value: str,
+    status: str,
+    postal_code: str | None,
+    latitude: float | None,
+    longitude: float | None,
+    attempt_count: int,
+    resolved_at: str,
+    error_code: str | None = None,
+    error_message: str | None = None,
+) -> None:
+    if status not in {"SUCCESS", "FAILED"}:
+        raise ValueError(f"Invalid address resolution status: {status}")
+    connection.execute(
+        """
+        INSERT INTO address_resolution
+          (source, source_identifier, search_value, postal_code, latitude, longitude,
+           status, error_code, error_message, attempt_count, resolved_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source, source_identifier) DO UPDATE SET
+          search_value=excluded.search_value, postal_code=excluded.postal_code,
+          latitude=excluded.latitude, longitude=excluded.longitude,
+          status=excluded.status, error_code=excluded.error_code,
+          error_message=excluded.error_message, attempt_count=excluded.attempt_count,
+          resolved_at=excluded.resolved_at
+        """,
+        (
+            source,
+            source_identifier,
+            search_value,
+            postal_code,
+            latitude,
+            longitude,
+            status,
+            error_code,
+            error_message,
+            attempt_count,
+            resolved_at,
+        ),
+    )
+    connection.commit()
 
 
 def iter_addresses(

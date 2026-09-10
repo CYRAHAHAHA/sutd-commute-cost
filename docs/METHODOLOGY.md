@@ -22,6 +22,10 @@ OneMap expects dates as `MM-DD-YYYY` and times as `HH:MM:SS`. Its `route_summary
 
 OneMap runs across every default-eligible residential origin (`VERIFIED` and `LIKELY`) and is not limited by the Google budget guard.
 
+### Residential origin population
+
+The first production layer is the official HDB Property Information dataset. Rows with `residential=Y` are resolved from exact block/street searches through OneMap, checked against the returned block and canonicalized street, and stored as one deduplicated postal-code point with source provenance. The resolver checkpoints every source record in SQLite and can resume after interruption. This is a defensible HDB layer, not a claim that private condominiums, apartments, landed homes, and mixed-use residences have already been enumerated; those sources require additional reviewed adapters.
+
 ## Google validation layer
 
 Google uses Routes API Compute Route Matrix with `travelMode=TRANSIT` and the configured SUTD coordinate as the sole destination. It samples these first-week weekdays and arrival targets:

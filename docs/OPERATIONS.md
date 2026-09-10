@@ -4,13 +4,14 @@
 
 1. Set the SUTD coordinate in `config/project.json`.
 2. Copy `.env.example` to `.env` and set provider credentials. `ONEMAP_ACCESS_TOKEN` alone is sufficient for OneMap; email/password are optional refresh credentials.
-3. Import a reviewed residential source CSV.
+3. Import a reviewed residential source CSV, or build the HDB first-layer database with the resumable adapter.
 4. Run both providers against `--limit 1` or `--limit 10` and inspect the SQLite rows.
 5. Build the summary and static dataset.
 
 ```powershell
 uv sync --extra dev
 uv run python -m scripts.discover_addresses --input data/sample_residential_addresses.csv
+uv run python -m scripts.import_hdb --dry-run
 uv run python -m scripts.collect_onemap --limit 1
 uv run python -m scripts.collect_google --limit 1
 uv run python -m scripts.build_public_dataset
@@ -56,7 +57,7 @@ Illustrative OneMap pacing-only bounds are:
 
 These are lower bounds, not promises: HTTP latency, 429 responses, transient failures, and exponential backoff add time. Google retries are also counted in the persistent budget ledger; the configured 9,000-event guard can stop a run before retries exceed the cap. In that case, already successful rows remain safe and the remaining work can be resumed only with available budget or an explicit `--override-budget` decision.
 
-Address discovery/import is not included in these estimates. Importing a reviewed CSV with coordinates is normally quick; `--resolve-missing` adds a OneMap geocoding request for each unresolved candidate and should be tested in small batches first. The current route collectors are resumable at observation level, while source discovery remains dependent on the quality and completeness of the supplied residential source.
+Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured one request per second, 10,796 current HDB candidates require a pacing-only lower bound of about 3 hours. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is a separate remaining source-acquisition task.
 
 ## Resuming
 
