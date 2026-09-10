@@ -52,3 +52,8 @@ def iter_ura_private_addresses(path: str | Path, limit: int | None = None) -> It
         )
         if limit is not None and len(seen) >= limit:
             return
+
+
+def read_ura_postal_codes(path: str | Path) -> set[str]:
+    """Return the source's unique postal keys for completeness audits."""
+    return {address.postal_code for address in iter_ura_private_addresses(path)}

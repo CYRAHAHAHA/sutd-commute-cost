@@ -28,7 +28,7 @@ The dry run is intentionally non-billable and does not contact Google:
 uv run python -m scripts.collect_google --limit 10 --dry-run
 ```
 
-With the current three-row fixture this reports 3 eligible origins, 27 planned route elements, 9 matrix HTTP requests, and 0 of the 9,000 configured Google budget events used. That is a successful local configuration and cost-safety check, but it is not a live API credential check.
+With a small fixture this reports the selected origins, planned route elements, matrix requests, and current budget usage without contacting Google. The completed production address dry run reported 94,334 origins, 86,309 Google-eligible origins after the 3.5 km exclusion, 1,000 selected origins, 9,000 planned elements, 108 matrix requests, and 9 previously used ledger events. That is a configuration and cost-safety check, not a live API credential check.
 
 After importing the real residential source, run the smallest live checks before a nationwide collection:
 
@@ -45,7 +45,7 @@ Let `N` be the number of default-eligible residential origins (`VERIFIED` and `L
 
 At the current configured pacing of four OneMap requests per second (240/minute, below the documented 300 calls/minute tokenized-API ceiling):
 
-- OneMap requires `70 × N` route calls, so its pacing-only lower bound is approximately `70 × N` seconds. For the current three-row fixture, that is 210 seconds (3 minutes 30 seconds).
+- OneMap requires `70 × N` route calls, so its pacing-only lower bound is approximately `70 × N` seconds. The completed production address database has `N = 94,334`, so the measured workload is `6,603,380` route calls and the pacing-only lower bound is 19 days 2 hours 34 minutes at four calls per second.
 - Google requires `9 × S` route elements and `9 × ceil(S / 90)` matrix HTTP requests. At the default maximum `S = 1,000`, that is 9,000 elements and 108 matrix requests, or approximately 1 minute 48 seconds of pacing time before network latency and retries.
 
 Illustrative OneMap pacing-only bounds are:
@@ -64,7 +64,7 @@ The live Google smoke test used 9 ledger events. Therefore, after the HDB popula
 
 Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured four requests per second, 10,796 current HDB candidates require a pacing-only lower bound of about 45 minutes. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is imported locally from URA and does not consume OneMap geocoding calls.
 
-For the current HDB candidate count, the eventual OneMap route collection is approximately `10,796 × 70 = 755,720` route calls, or about 2 days 5 hours at four requests per second before latency, retries, and failures. This is an explicit long-running operation; the repository does not start it as a side effect of address import or website build.
+For the completed HDB+URA production population, the eventual OneMap route collection is `94,334 × 70 = 6,603,380` route calls, or 19 days 2 hours 34 minutes at four requests per second before latency, retries, and failures. This is an explicit multi-week operation; the repository does not start it as a side effect of address import or website build. Do not launch it without confirming that the OneMap quota, token lifetime/refresh plan, machine uptime, and fixed-date collection window are acceptable.
 
 ## Resuming
 

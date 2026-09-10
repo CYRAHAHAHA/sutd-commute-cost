@@ -4,7 +4,7 @@ import argparse
 import sys
 
 from commute.addresses.hdb import HDB_SOURCE, read_hdb_residential_csv
-from commute.addresses.ura import URA_SOURCE, iter_ura_private_addresses
+from commute.addresses.ura import URA_SOURCE, read_ura_postal_codes
 from commute.config import ConfigError, load_config, resolve_path
 from commute.db import init_addresses_db
 
@@ -40,7 +40,15 @@ def main(argv: list[str] | None = None) -> int:
             ).fetchall()
         )
         hdb_expected = len(read_hdb_residential_csv(args.property_csv))
-        ura_expected = sum(1 for _ in iter_ura_private_addresses(args.ura_geojson))
+        ura_postals = read_ura_postal_codes(args.ura_geojson)
+        hdb_postals = {
+            row[0]
+            for row in connection.execute(
+                "SELECT postal_code FROM residential_address WHERE source=?", (HDB_SOURCE,)
+            )
+        }
+        ura_hdb_overlaps = len(ura_postals & hdb_postals)
+        ura_expected = len(ura_postals) - ura_hdb_overlaps
         hdb_success = int(resolution_counts.get("SUCCESS", 0))
         hdb_failed = int(resolution_counts.get("FAILED", 0))
         invalid_coordinates = int(
@@ -66,6 +74,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(
             f"URA source: {source_counts.get(URA_SOURCE, 0):,}/{ura_expected:,} imported; "
+            f"{ura_hdb_overlaps:,} HDB overlaps retained as HDB; "
             f"fixture rows: {fixture_rows:,}; invalid coordinates: {invalid_coordinates:,}; "
             f"duplicate postals: {duplicate_postals:,}"
         )

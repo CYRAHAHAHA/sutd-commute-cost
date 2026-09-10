@@ -26,6 +26,8 @@ OneMap runs across every default-eligible residential origin (`VERIFIED` and `LI
 
 The production population combines two official layers. HDB Property Information rows with `residential=Y` are resolved from exact block/street searches through OneMap, checked against the returned block and canonicalized street, and stored as deduplicated postal-code points with source provenance. URA's No of Dwelling Units GeoJSON supplies private landed, non-landed, and executive-condominium postal points and coordinates directly. HDB remains the preferred record on an overlap. The HDB resolver checkpoints every source record in SQLite and can resume after interruption; the URA import is local and does not consume routing/geocoding quota. The resulting population is still limited to what these official completed-residential layers represent; any future source must be added as a separately identified adapter rather than silently mixed in.
 
+The completed local source build contains 94,334 unique postal-code origins: 10,796 HDB records and 83,538 URA records. Three URA postal points overlap an HDB postal point and are retained under the HDB source, leaving 83,538 separate URA rows. The strict audit found zero duplicate postal keys and zero invalid coordinates.
+
 ## Google validation layer
 
 Google uses Routes API Compute Route Matrix with `travelMode=TRANSIT` and the configured SUTD coordinate as the sole destination. It samples these first-week weekdays and arrival targets:

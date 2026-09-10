@@ -119,7 +119,9 @@ uv run python -m scripts.collect_google --limit 10
 uv run python -m scripts.collect_onemap --postal-code 200640
 uv run python -m scripts.collect_google --postal-code 200640
 
-# Full runs. OneMap covers all eligible origins. Google selects at most 1,000.
+# Full runs. OneMap covers all eligible origins; the current completed production database is 94,334 origins,
+# which is 6,603,380 calls (about 19 days 2 hours 34 minutes at the configured pacing) before latency/retries.
+# Google selects at most 1,000.
 uv run python -m scripts.collect_onemap --all
 uv run python -m scripts.collect_google --all --confirm-large-run
 
@@ -158,7 +160,7 @@ npm run build
 
 Unit tests mock provider HTTP responses. Real provider calls are intentionally separate from the normal test suite; use the scoped collection commands above for explicit integration checks after configuring credentials.
 
-The Google dry run has been completed against the three-row fixture: 3 eligible origins, 27 planned route elements, 9 planned matrix requests, and 0 budget events used. This confirms local configuration, sampling, exclusion, resumability inputs, and budget accounting; it does not confirm live credentials because `--dry-run` makes no network calls.
+The Google dry run is non-billable and does not confirm live credentials. Against the completed production address database it reports 94,334 origins, 8,025 origins excluded within 3.5 km of SUTD, 86,309 eligible origins, 1,000 selected origins, 9,000 planned elements, 108 matrix requests, and 9 previously used ledger events. The default 1,000-origin run is therefore blocked by the configured 9,000-event guard; `--all --limit 999 --confirm-large-run` plans 8,991 new elements and fits the current ledger.
 
 ## GitHub Pages
 

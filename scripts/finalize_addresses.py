@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from commute.addresses.hdb import HDB_SOURCE, read_hdb_residential_csv
-from commute.addresses.ura import URA_SOURCE, iter_ura_private_addresses
+from commute.addresses.ura import URA_SOURCE, read_ura_postal_codes
 from commute.config import ConfigError, load_config, resolve_path
 from commute.db import init_addresses_db
 
@@ -41,7 +41,15 @@ def main(argv: list[str] | None = None) -> int:
                 "SELECT COUNT(*) FROM address_resolution WHERE source=? AND status='FAILED'", (HDB_SOURCE,)
             ).fetchone()[0]
         )
-        ura_expected = sum(1 for _ in iter_ura_private_addresses("data/input/URA_NoOfDwellingUnits.geojson"))
+        ura_postals = read_ura_postal_codes("data/input/URA_NoOfDwellingUnits.geojson")
+        hdb_postals = {
+            row[0]
+            for row in connection.execute(
+                "SELECT postal_code FROM residential_address WHERE source=?", (HDB_SOURCE,)
+            )
+        }
+        ura_hdb_overlaps = len(ura_postals & hdb_postals)
+        ura_expected = len(ura_postals) - ura_hdb_overlaps
         ura_imported = int(
             connection.execute("SELECT COUNT(*) FROM residential_address WHERE source=?", (URA_SOURCE,)).fetchone()[0]
         )
@@ -49,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigError(
                 "Production finalization requires complete HDB and URA imports: "
                 f"HDB {hdb_success}/{hdb_expected} with {hdb_failed} failures; "
-                f"URA {ura_imported}/{ura_expected}"
+                f"URA {ura_imported}/{ura_expected} ({ura_hdb_overlaps} HDB overlaps retained)"
             )
         fixture_count = int(
             connection.execute("SELECT COUNT(*) FROM residential_address WHERE source='sample_fixture'").fetchone()[0]

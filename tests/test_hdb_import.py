@@ -10,7 +10,7 @@ from commute.addresses.hdb import (
     read_hdb_postals_by_block,
     read_hdb_residential_csv,
 )
-from commute.addresses.ura import URA_SOURCE, iter_ura_private_addresses
+from commute.addresses.ura import URA_SOURCE, iter_ura_private_addresses, read_ura_postal_codes
 from commute.db import get_address_resolution, init_addresses_db, save_address_resolution
 
 
@@ -115,3 +115,4 @@ def test_ura_private_geojson_yields_verified_postal_points(tmp_path):
     assert rows[0].confidence == "VERIFIED"
     assert rows[0].residential_type == "PRIVATE_NON_LANDED"
     assert rows[0].latitude == 1.3
+    assert read_ura_postal_codes(path) == {"123456"}
