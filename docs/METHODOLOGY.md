@@ -64,7 +64,7 @@ It is not an average of all raw observations and is calculated only when both pr
 
 ## Publication choice
 
-The public dataset contains postcode summaries, Google inclusion/exclusion metadata, and methodology metadata. It intentionally does not ship raw observations in the browser bundle: the local SQLite database is the audit store, and `scripts.export_csv` supports controlled exports.
+The public dataset contains postcode summaries, Google inclusion/exclusion metadata, and methodology metadata. The frontend uses the OneMap mean as the headline coverage estimate; Google and the equal-weight Combined value are shown as validation detail when available. It intentionally does not ship raw observations in the browser bundle: the local SQLite database is the audit store, and `scripts.export_csv` supports controlled exports.
 
 ## Unmapped and live lookup boundary
 

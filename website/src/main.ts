@@ -131,24 +131,26 @@ function providerDetails(name: string, summary: ProviderSummary, methodology: Me
 
 function renderResult(record: PostcodeSummary, methodology: Methodology): string {
   const hasCombined = record.combined.status === "SUCCESS" && record.combined.mean_seconds !== null;
-  const oneWay = hasCombined ? Math.round((record.combined.mean_seconds as number) / 60) : null;
+  const hasOneMap = record.onemap.status === "SUCCESS" && record.onemap.mean_seconds !== null;
+  const primarySeconds = hasOneMap ? record.onemap.mean_seconds : hasCombined ? record.combined.mean_seconds : null;
+  const oneWay = primarySeconds === null ? null : Math.round(primarySeconds / 60);
   const googleExcludedForRadius = record.google_exclusion_reason === "within_3.5km_of_sutd";
   const coverageWarning = record.onemap_exclusion_reason
     ? "This postcode is known, but landed homes are excluded from scheduled OneMap mapping."
     : googleExcludedForRadius
       ? `Google validation is intentionally excluded within ${methodology.google_sampling.exclusion_radius_km.toFixed(1)} km of SUTD. OneMap remains the coverage layer for this postcode.`
-      : `This postcode is known, but both provider estimates need at least ${methodology.minimum_successful_samples.GOOGLE} Google and ${methodology.minimum_successful_samples.ONEMAP} OneMap successful samples before a combined estimate is shown.`;
+      : `This postcode is known, but OneMap needs at least ${methodology.minimum_successful_samples.ONEMAP} successful samples before a coverage estimate is shown.`;
   return `
     <section class="result-card" aria-live="polite">
-      <div class="result-kicker">${hasCombined ? "Your estimate" : record.google_exclusion_reason ? "OneMap coverage only" : "Not enough observations yet"}</div>
-      <div class="big-number">${minutes(record.combined.mean_seconds)}</div>
+      <div class="result-kicker">${hasCombined ? "Combined estimate" : hasOneMap ? "OneMap coverage estimate" : "Not enough observations yet"}</div>
+      <div class="big-number">${minutes(primarySeconds)}</div>
       <div class="result-label">Average weekday-morning<br />public-transport commute to SUTD</div>
       <div class="breakdown">
         <div><span>Google Maps</span><strong>${minutes(record.google.mean_seconds)}</strong></div>
         <div><span>OneMap</span><strong>${minutes(record.onemap.mean_seconds)}</strong></div>
         <div class="combined-row"><span>Combined</span><strong>${minutes(record.combined.mean_seconds)}</strong></div>
       </div>
-      ${hasCombined ? `<p class="extrapolation">≈ ${oneWay! * 2} minutes commuting per school day<br /><span>≈ ${((oneWay! * 2 * 5) / 60).toFixed(1)} hours over a 5-day week</span><small>Simple round-trip extrapolation, not another route calculation.</small></p>` : `<p class="warning">${coverageWarning}</p>`}
+      ${primarySeconds !== null ? `<p class="extrapolation">≈ ${oneWay! * 2} minutes commuting per school day<br /><span>≈ ${((oneWay! * 2 * 5) / 60).toFixed(1)} hours over a 5-day week</span><small>Simple round-trip extrapolation of the displayed ${hasCombined ? "combined" : "OneMap"} estimate, not another route calculation.</small></p>` : `<p class="warning">${coverageWarning}</p>`}
       ${record.onemap_observation_mode === "REPRESENTATIVE" ? `<p class="note">OneMap uses the representative point for this named development (${record.onemap_group_representative}); the same measured route is assigned to its ${record.onemap_group_size} mapped postal points.</p>` : ""}
       ${record.onemap_exclusion_reason ? `<p class="warning">This residential record is retained in the address index, but landed homes are excluded from scheduled OneMap mapping. A live calculation is not enabled on this static site because provider credentials must not be shipped to the browser.</p>` : ""}
       <details class="methodology-detail">
