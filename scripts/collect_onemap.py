@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 
 from commute.collector import ProviderError
 from commute.config import (
@@ -14,7 +15,7 @@ from commute.config import (
     resolve_path,
 )
 from commute.db import init_addresses_db, init_observations_db, iter_addresses
-from commute.providers.onemap import OneMapClient
+from commute.providers.onemap import OneMapClient, token_expiry
 from commute.runners import collect_onemap
 
 
@@ -49,7 +50,23 @@ def main(argv: list[str] | None = None) -> int:
             print("No matching residential addresses found.", file=sys.stderr)
             return 1
         expected = expected_samples(config, "ONEMAP")
-        print(f"ONEMAP workload: {len(rows):,} residential origins × {expected} = {len(rows) * expected:,} route calls")
+        route_calls = len(rows) * expected
+        print(f"ONEMAP workload: {len(rows):,} residential origins × {expected} = {route_calls:,} route calls")
+        if access_token and not email and not password:
+            expiry = token_expiry(access_token)
+            requests_per_second = float(config["providers"]["ONEMAP"].get("requests_per_second", 1.0))
+            if expiry and requests_per_second > 0:
+                remaining_seconds = expiry - time.time()
+                estimated_seconds = route_calls / requests_per_second
+                print(
+                    f"ONEMAP token expiry: {time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(expiry))}; "
+                    f"estimated pacing time: {estimated_seconds:,.0f} seconds"
+                )
+                if args.all and not args.dry_run and remaining_seconds < estimated_seconds:
+                    raise ConfigError(
+                        "ONEMAP_ACCESS_TOKEN will expire before this full workload can finish. "
+                        "Refresh the token or run a bounded resumable chunk with --limit."
+                    )
         if args.dry_run:
             return 0
         observation_connection = init_observations_db(resolve_path(config, config["observations_database"]))

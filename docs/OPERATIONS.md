@@ -68,6 +68,24 @@ For the completed HDB+URA production population, the eventual OneMap route colle
 
 OneMap access tokens are normally valid for three days. A token-only `.env` therefore cannot sustain this multi-week run by itself. Before the first experiment date and whenever the token expires, replace `ONEMAP_ACCESS_TOKEN` and rerun the same collector command; successful observations are skipped and only missing jobs are attempted. The collector now stops immediately on authentication failure without converting the remaining jobs into terminal `FAILED` rows. Email/password refresh is supported when the account flow permits it, but do not assume it is unattended if an email confirmation code is required.
 
+## Parallelism and the one-day constraint
+
+The official [OneMap routing endpoint](https://www.onemap.gov.sg/apidocs/routing) documents one `start` and one `end` coordinate per request. `numItineraries` controls how many alternatives one origin request returns; it is not a multi-origin batch facility. The routing documentation also lists HTTP 429 for quota exhaustion. OneMap's [current workshop material](https://www.onemap.gov.sg/apidocs/static/media/OneMap_API_Workshop_Presentation_260825.04f72136081dd249c5ee.pdf) states a 300-calls-per-minute limit for token-based APIs. The project therefore uses one aggregate limiter at four calls per second (240/minute). Multiple terminal sessions with independent limiters would only create 429s; sharding is useful for restartability or for an explicitly approved higher quota, not for bypassing the documented allowance.
+
+For the completed 94,334-origin database, the 70-observation design requires 6,603,380 calls. At the documented 300/minute ceiling, the theoretical minimum is about 15.3 days; completing it in 24 hours would require about 4,586 calls/minute, before retries. Excluding the 3.5 km radius removes only 8,025 origins and still leaves 6,041,630 calls (about 14.0 days at 300/minute).
+
+The local feasibility analysis below uses a deterministic greedy representative: every postcode is assigned to a representative within the stated radius, and the representative is routed for all 70 observations. It is an estimate, not yet a production clustering rule, and does not prove that nearby postcodes have identical public-transport routes.
+
+| Representative rule | Representatives after 3.5 km exclusion | Route calls | Minimum at 240/min | Minimum at 300/min |
+| --- | ---: | ---: | ---: | ---: |
+| No clustering | 86,309 | 6,041,630 | 17.5 d | 14.0 d |
+| ≤30 m representative radius | 30,835 | 2,158,450 | 6.25 d | 5.0 d |
+| ≤50 m representative radius | 18,399 | 1,287,930 | 3.73 d | 3.0 d |
+| ≤100 m representative radius | 7,333 | 513,310 | 1.49 d | 1.19 d |
+| ≤150 m representative radius | 4,036 | 282,520 | 0.82 d | 0.65 d |
+
+This shows that 20–30 m clustering does not meet a one-day target. The 100 m option is still slightly over a day even at 300/minute, while 150 m is coarse enough to risk assigning different walking access points or transit choices the same route. If one day is non-negotiable, the least geographically distorting option is to keep every origin and reduce the temporal sample count to roughly four observations per origin at the current 240/minute setting (or five at 300/minute with almost no headroom). That is a methodology change and must be versioned in `config/project.json`; it should not be silently substituted for the 70-observation experiment.
+
 ## Resuming
 
 Collectors generate the same deterministic job keys every time. A `SUCCESS` row is skipped. A failed row is eligible to run again, and each new result is persisted immediately. The database uses a unique constraint to make retries idempotent.
