@@ -54,9 +54,17 @@ def main(argv: list[str] | None = None) -> int:
         expected = expected_samples(config, "ONEMAP")
         route_calls = len(rows) * expected
         print(f"ONEMAP workload: {len(rows):,} residential origins × {expected} = {route_calls:,} route calls")
-        if access_token and not email and not password:
+        spec = config["providers"]["ONEMAP"]
+        requests_per_second = float(spec.get("requests_per_second", 1.0))
+        workers = max(1, int(spec.get("parallel_workers", 1)))
+        max_in_flight = max(workers, int(spec.get("max_in_flight", workers * 4)))
+        print(
+            f"ONEMAP execution: {workers} workers, {max_in_flight} max in-flight, "
+            f"one shared limiter at {requests_per_second:g} requests/sec; "
+            f"pacing floor {route_calls / requests_per_second / 3600:.2f} hours"
+        )
+        if access_token and not (email and password):
             expiry = token_expiry(access_token)
-            requests_per_second = float(config["providers"]["ONEMAP"].get("requests_per_second", 1.0))
             if expiry and requests_per_second > 0:
                 remaining_seconds = expiry - time.time()
                 estimated_seconds = route_calls / requests_per_second

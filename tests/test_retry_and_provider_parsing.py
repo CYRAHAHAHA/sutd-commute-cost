@@ -42,8 +42,8 @@ def test_permanent_error_is_not_retried():
 
     try:
         call_with_retries(operation, 5, sleep=lambda _: None)
-    except ProviderError:
-        pass
+    except ProviderError as exc:
+        assert exc.attempt_count == 1
     assert calls == 1
 
 

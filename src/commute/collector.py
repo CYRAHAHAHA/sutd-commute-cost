@@ -4,6 +4,7 @@ import time as time_module
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from threading import Lock
 from typing import Any
 
 from .config import as_utc_rfc3339
@@ -18,6 +19,7 @@ class ProviderError(Exception):
     http_status: int | None = None
     error_code: str | None = None
     retryable: bool | None = None
+    attempt_count: int | None = None
 
     def __str__(self) -> str:
         return self.message
@@ -57,13 +59,15 @@ class RateLimiter:
     def __init__(self, requests_per_second: float) -> None:
         self.interval = 1.0 / requests_per_second if requests_per_second > 0 else 0
         self._last_request = 0.0
+        self._lock = Lock()
 
     def wait(self) -> None:
-        elapsed = time_module.monotonic() - self._last_request
-        delay = self.interval - elapsed
-        if delay > 0:
-            time_module.sleep(delay)
-        self._last_request = time_module.monotonic()
+        with self._lock:
+            elapsed = time_module.monotonic() - self._last_request
+            delay = self.interval - elapsed
+            if delay > 0:
+                time_module.sleep(delay)
+            self._last_request = time_module.monotonic()
 
 
 def now_utc() -> str:
@@ -136,6 +140,7 @@ def call_with_retries(
         except ProviderError as exc:
             decision = exc.decision
             if not decision.retryable or attempts >= max_attempts:
+                exc.attempt_count = attempts
                 raise
             sleep(backoff_seconds(attempts, base=base_backoff))
     raise AssertionError("unreachable")

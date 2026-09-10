@@ -63,7 +63,7 @@ ONEMAP_EMAIL=...
 ONEMAP_PASSWORD=...
 ```
 
-The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git. The current classified production route workload is 149,265 calls for 16,585 routed origins: a pacing-only floor of about 10 hours 23 minutes at the configured 4 requests/second. A fresh token is still required; the collector stops safely on authentication failure rather than mass-marking remaining jobs as failed.
+The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git. The current classified production route workload is 149,265 calls for 16,585 routed origins: a pacing-only floor of about 10 hours 23 minutes at the configured 4 requests/second. The collector uses 8 workers behind one shared limiter; a live 90-job benchmark completed at 3.49 jobs/second, projecting roughly 11 hours 52 minutes before retries. A fresh token is still required; the collector stops safely on authentication failure rather than mass-marking remaining jobs as failed.
 
 Before OneMap collection, classify the named private developments. This keeps HDB blocks individual, collapses named condo/EC postal points to a medoid postcode, and excludes landed homes from scheduled mapping:
 
@@ -130,7 +130,8 @@ uv run python -m scripts.collect_google --postal-code 200640
 
 # Full runs. OneMap covers HDB plus grouped non-landed/EC development representatives; the current
 # completed production database is 16,585 routed origins, which is 149,265 calls
-# (about 10 hours 23 minutes at the configured pacing) before latency/retries.
+# (10 hours 23 minutes pacing floor; roughly 11 hours 52 minutes from the live
+# concurrent benchmark) before retries.
 # Google selects at most 1,000.
 uv run python -m scripts.collect_onemap --all
 uv run python -m scripts.collect_google --all --confirm-large-run

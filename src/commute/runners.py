@@ -3,6 +3,8 @@ from __future__ import annotations
 import math
 import time as time_module
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Event
 from typing import Any
 
 from .collector import (
@@ -88,7 +90,13 @@ def collect_google(
             except Exception as exc:
                 provider_error = exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
                 for job in jobs:
-                    save_failure(connection, job, config, attempts or int(spec.get("max_attempts", 5)), provider_error)
+                    save_failure(
+                        connection,
+                        job,
+                        config,
+                        attempts or provider_error.attempt_count or int(spec.get("max_attempts", 5)),
+                        provider_error,
+                    )
                     stats["failed"] += 1
                 logger(f"GOOGLE {service_date} {query_time}: batch failed: {provider_error}")
                 continue
@@ -146,53 +154,89 @@ def collect_onemap(
     jobs = jobs_for_provider(config, "ONEMAP", rows)
     stats = {"success": 0, "failed": 0, "skipped": 0, "requests": 0}
     total = len(jobs)
+    pending: list[Job] = []
+    for job in jobs:
+        if is_success(connection, job.postal_code, "ONEMAP", job.service_date, job.query_time):
+            stats["skipped"] += 1
+        else:
+            pending.append(job)
+
+    workers = max(1, int(spec.get("parallel_workers", 1)))
+    max_in_flight = max(workers, int(spec.get("max_in_flight", workers * 4)))
+    stop_event = Event()
+    max_attempts = int(spec.get("max_attempts", 5))
+    started_at = time_module.monotonic()
+
+    def route_one(job: Job) -> tuple[Job, int | None, int, ProviderError | None]:
+        attempts = 0
+
+        def request_route():
+            if stop_event.is_set():
+                raise ProviderError(
+                    "OneMap collection stopped after an authentication failure",
+                    error_code="AUTHENTICATION_FAILED",
+                    retryable=False,
+                )
+            limiter.wait()
+            return client.route(
+                (job.origin_lat, job.origin_lng),
+                destination,
+                job.service_date,
+                job.query_time,
+                int(spec.get("max_walk_distance", 1000)),
+                int(spec.get("num_itineraries", 1)),
+            )
+
+        try:
+            duration, attempts = call_with_retries(
+                request_route,
+                max_attempts,
+                sleep=sleep or time_module.sleep,
+            )
+            return job, int(duration), attempts, None
+        except Exception as exc:
+            provider_error = exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
+            return job, None, attempts or provider_error.attempt_count or max_attempts, provider_error
+
+    executor = ThreadPoolExecutor(max_workers=workers)
     try:
-        for job in jobs:
-            if is_success(connection, job.postal_code, "ONEMAP", job.service_date, job.query_time):
-                stats["skipped"] += 1
-                continue
-            attempts = 0
-            try:
-
-                def request_route():
-                    limiter.wait()
-                    stats["requests"] += 1
-                    return client.route(
-                        (job.origin_lat, job.origin_lng),
-                        destination,
-                        job.service_date,
-                        job.query_time,
-                        int(spec.get("max_walk_distance", 1000)),
-                        int(spec.get("num_itineraries", 1)),
+        for start in range(0, len(pending), max_in_flight):
+            batch = pending[start : start + max_in_flight]
+            futures = {executor.submit(route_one, job): job for job in batch}
+            for future in as_completed(futures):
+                job, duration, attempts, provider_error = future.result()
+                stats["requests"] += attempts
+                if provider_error is None:
+                    save_observation(
+                        connection,
+                        observation_from_job(job, config, duration, "SUCCESS", attempts),
                     )
-
-                duration, attempts = call_with_retries(
-                    request_route,
-                    int(spec.get("max_attempts", 5)),
-                    sleep=sleep or time_module.sleep,
-                )
-                save_observation(
-                    connection,
-                    observation_from_job(job, config, int(duration), "SUCCESS", attempts),
-                )
-                stats["success"] += 1
-            except Exception as exc:
-                provider_error = exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
-                if provider_error.error_code == "AUTHENTICATION_FAILED":
+                    stats["success"] += 1
+                elif provider_error.error_code == "AUTHENTICATION_FAILED":
+                    stop_event.set()
+                    for pending_future in futures:
+                        pending_future.cancel()
                     logger(
                         "ONEMAP authentication failed; stopping without marking the remaining jobs as failed. "
                         "Refresh ONEMAP_ACCESS_TOKEN and resume the collector."
                     )
                     raise provider_error
-                save_failure(connection, job, config, attempts or int(spec.get("max_attempts", 5)), provider_error)
-                stats["failed"] += 1
-            completed = stats["success"] + stats["failed"] + stats["skipped"]
-            logger(
-                f"ONEMAP {completed:,} / {total:,} observations; "
-                f"{stats['success']:,} success, {stats['failed']:,} failed; requests {stats['requests']:,}"
-            )
+                else:
+                    save_failure(connection, job, config, attempts, provider_error)
+                    stats["failed"] += 1
+                completed = stats["success"] + stats["failed"] + stats["skipped"]
+                if completed % 100 == 0 or provider_error is not None or completed == total:
+                    elapsed = max(time_module.monotonic() - started_at, 0.001)
+                    logger(
+                        f"ONEMAP {completed:,} / {total:,} observations; "
+                        f"{stats['success']:,} success, {stats['failed']:,} failed; "
+                        f"requests {stats['requests']:,}; rate {stats['requests'] / elapsed:.2f}/s"
+                    )
     except KeyboardInterrupt:
+        stop_event.set()
         logger("ONEMAP interrupted; successful and terminal observations are already persisted")
+    finally:
+        executor.shutdown(wait=True, cancel_futures=True)
     return stats
 
 
