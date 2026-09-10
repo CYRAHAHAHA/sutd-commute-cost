@@ -62,6 +62,7 @@
   "google_sampling": {
     "exclusion_radius_km": 3.5,
     "sample_size": 1000,
+    "minimum_production_sample_size": 999,
     "monthly_request_budget": 9000,
     "sampling_seed": 20260910,
     "stratum_cell_degrees": 0.02

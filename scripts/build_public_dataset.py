@@ -94,7 +94,13 @@ def collection_completeness(config: dict) -> dict[str, dict[str, int]]:
         "ONEMAP": routed,
         "GOOGLE": [row for row in routed if row["google_sample_selected"]],
     }
-    result: dict[str, dict[str, int]] = {}
+    minimum_google_sample = int(
+        config.get("google_sampling", {}).get(
+            "minimum_production_sample_size",
+            config.get("google_sampling", {}).get("sample_size", 0),
+        )
+    )
+    result: dict[str, dict[str, int | bool]] = {}
     for provider, rows in populations.items():
         expected = {
             (job.postal_code, job.service_date, job.query_time)
@@ -110,6 +116,8 @@ def collection_completeness(config: dict) -> dict[str, dict[str, int]]:
         matched = len(expected & actual)
         result[provider] = {
             "population": len(rows),
+            "selection_ready": provider != "GOOGLE" or len(rows) >= minimum_google_sample,
+            "minimum_population": minimum_google_sample if provider == "GOOGLE" else 0,
             "expected_jobs": len(expected),
             "persisted_jobs": matched,
             "missing_jobs": len(expected - actual),
@@ -119,10 +127,19 @@ def collection_completeness(config: dict) -> dict[str, dict[str, int]]:
 
 def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[Path, Path]:
     completeness = collection_completeness(config)
-    incomplete = {provider: values for provider, values in completeness.items() if values["missing_jobs"]}
+    incomplete = {
+        provider: values
+        for provider, values in completeness.items()
+        if values["missing_jobs"] or not values["selection_ready"]
+    }
     if incomplete and not allow_incomplete:
         details = "; ".join(
-            f"{provider}: {values['persisted_jobs']:,}/{values['expected_jobs']:,} jobs"
+            (
+                f"{provider}: Google sample selection has "
+                f"{values['population']:,}/{values['minimum_population']:,} origins"
+                if not values["selection_ready"] and provider == "GOOGLE"
+                else f"{provider}: {values['persisted_jobs']:,}/{values['expected_jobs']:,} jobs"
+            )
             for provider, values in incomplete.items()
         )
         raise ConfigError(

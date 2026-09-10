@@ -24,10 +24,14 @@ def build_summary(config: dict) -> dict:
         for service_date in spec.get("dates", config["experiment"]["dates"])
         for query_time in spec["times"]
     }
+    selected_google_postcodes = {
+        address["postal_code"] for address in addresses if address["google_sample_selected"]
+    }
     observations = [
         row
         for row in iter_observations(observation_connection)
         if (row["provider"], row["service_date"], row["query_time"]) in configured_keys
+        and (row["provider"] != "GOOGLE" or row["postal_code"] in selected_google_postcodes)
     ]
     direct_by_postal: dict[str, list] = {}
     for observation in observations:
