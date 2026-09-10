@@ -22,6 +22,8 @@ This is a deliberate reduced temporal sample: Monday, Wednesday, and Friday with
 
 OneMap expects dates as `MM-DD-YYYY` and times as `HH:MM:SS`. Its `route_summary.total_time` is stored as seconds.
 
+The OneMap routing service exposes a short rolling window for future public-transport dates rather than guaranteeing arbitrary advance scheduling. The collector therefore supports `--date` to run one or more dates already listed in this configuration as they become available. This is an operational scheduling constraint only: the configured experiment dates remain fixed, and no replacement dates may be silently inserted. A date that is not currently returned by OneMap remains pending and is not interpreted as a zero-minute route.
+
 OneMap runs across every default-eligible HDB origin and every available named private non-landed/EC development representative. Private landed homes are retained as residential index records but excluded from scheduled mapping because one representative point for an estate or street would not be a defensible route origin. Named non-landed/EC developments are grouped by URA `PROJ_NAME`; the representative is the existing postcode point nearest the development's geographic medoid. Every member postcode remains searchable and inherits the representative's result with an explicit `REPRESENTATIVE` observation mode. Unnamed non-landed/EC points remain individual origins.
 
 ### Residential origin population
