@@ -101,3 +101,25 @@ def test_onemap_access_token_can_be_used_without_email_or_password():
     assert client.route((1.3, 103.8), (1.34, 103.96), "2026-09-14", "06:20") == 888
     assert seen == {"path": "/api/public/routingsvc/route", "authorization": "existing-token"}
     assert token_expiry("not-a-jwt") == 0
+
+
+def test_onemap_route_not_found_is_bounded_retryable():
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            return httpx.Response(404, json={"error": "No route found between the specified locations"})
+        return httpx.Response(200, json={"route_summary": {"total_time": 777}})
+
+    client = OneMapClient(
+        access_token="existing-token",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    result = call_with_retries(
+        lambda: client.route((1.3, 103.8), (1.34, 103.96), "2026-09-14", "06:20"),
+        3,
+        sleep=lambda _: None,
+    )
+    assert result == (777, 3)

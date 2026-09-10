@@ -119,10 +119,16 @@ class OneMapClient:
                 continue
             break
         if response.status_code >= 400:
+            is_route_request = path == "/api/public/routingsvc/route"
+            is_transient_route_not_found = is_route_request and response.status_code == 404
             raise ProviderError(
                 f"OneMap HTTP {response.status_code}: {response.text[:500]}",
                 http_status=response.status_code,
-                error_code="ROUTE_NOT_FOUND" if response.status_code == 404 else None,
+                error_code="ROUTE_NOT_FOUND" if is_route_request and response.status_code == 404 else None,
+                # OneMap has returned temporary 404/no-route responses under load for
+                # otherwise valid Singapore origins. Let the collector retry these a
+                # bounded number of times; non-routing 404s remain permanent errors.
+                retryable=True if is_transient_route_not_found else None,
             )
         payload = response.json()
         if isinstance(payload, dict) and payload.get("error"):

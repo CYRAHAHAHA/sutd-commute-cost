@@ -129,12 +129,16 @@ uv run python -m scripts.collect_onemap --postal-code 200640
 uv run python -m scripts.collect_google --postal-code 200640
 
 # Full runs. OneMap covers HDB plus grouped non-landed/EC development representatives; the current
-# completed production database is 16,585 routed origins, which is 149,265 calls
-# (10 hours 23 minutes pacing floor; roughly 11 hours 52 minutes from the live
-# concurrent benchmark) before retries.
+# production address database contains 16,585 routed origins, which is 149,265 calls
+# across the three configured OneMap dates. OneMap dates may need to be run separately
+# because the routing API exposes only a short rolling future-date window.
 # Google selects at most 1,000.
 uv run python -m scripts.collect_onemap --all
 uv run python -m scripts.collect_google --all --confirm-large-run
+
+# Date-scoped OneMap collection when a configured date is inside that rolling window.
+# Repeat for 2026-09-16 and 2026-09-18 later; these are not substitute dates.
+uv run python -m scripts.collect_onemap --all --date 2026-09-14
 
 # After the 9-event local Google smoke test, stay under the configured 9,000-event guard:
 uv run python -m scripts.collect_google --all --limit 999 --confirm-large-run
@@ -143,7 +147,7 @@ uv run python -m scripts.collect_google --all --limit 999 --confirm-large-run
 uv run python -m scripts.collect_google --all --confirm-large-run --override-budget
 ```
 
-Google prints the full population, radius exclusions, eligible count, selected count, planned route elements, matrix HTTP requests, and current budget usage before starting. Successful and terminally failed observations are written immediately to SQLite. Restarting skips existing successes; failed rows can be retried. Ctrl+C is handled without discarding completed work.
+Google prints the full population, radius exclusions, eligible count, selected count, planned route elements, matrix HTTP requests, and current budget usage before starting. Successful and terminally failed observations are written immediately to SQLite. Restarting skips existing successes; failed rows can be retried. Ctrl+C is handled without discarding completed work. OneMap has the same resumability, and `--date` narrows collection to already-configured dates without changing the experiment definition.
 
 ## Build summaries and site
 

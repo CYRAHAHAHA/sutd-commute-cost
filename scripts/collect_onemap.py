@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import sys
 import time
 
@@ -23,6 +24,12 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Collect OneMap public-transport observations.")
     result.add_argument("--limit", type=int, help="Maximum number of residential origins to process")
     result.add_argument("--postal-code", help="Process exactly one postal code")
+    result.add_argument(
+        "--date",
+        action="append",
+        dest="dates",
+        help="Collect only this configured service date; repeat for multiple dates",
+    )
     result.add_argument("--all", action="store_true", help="Select all included residential origins")
     result.add_argument("--dry-run", action="store_true", help="Print workload and make no API calls")
     return result
@@ -37,6 +44,17 @@ def main(argv: list[str] | None = None) -> int:
         config = load_config()
         destination(config, require_coordinates=True)
         load_environment()
+        if args.dates:
+            configured_dates = set(config["providers"]["ONEMAP"].get("dates", config["experiment"]["dates"]))
+            invalid_dates = sorted(set(args.dates) - configured_dates)
+            if invalid_dates:
+                raise ConfigError(
+                    "--date must refer to a configured OneMap date; invalid date(s): " + ", ".join(invalid_dates)
+                )
+            run_config = copy.deepcopy(config)
+            run_config["providers"]["ONEMAP"]["dates"] = args.dates
+        else:
+            run_config = config
         access_token = credential("ONEMAP_ACCESS_TOKEN")
         email = credential("ONEMAP_EMAIL")
         password = credential("ONEMAP_PASSWORD")
@@ -51,10 +69,12 @@ def main(argv: list[str] | None = None) -> int:
         if not rows:
             print("No matching residential addresses found.", file=sys.stderr)
             return 1
-        expected = expected_samples(config, "ONEMAP")
+        expected = expected_samples(run_config, "ONEMAP")
         route_calls = len(rows) * expected
         print(f"ONEMAP workload: {len(rows):,} residential origins × {expected} = {route_calls:,} route calls")
-        spec = config["providers"]["ONEMAP"]
+        spec = run_config["providers"]["ONEMAP"]
+        if args.dates:
+            print("ONEMAP dates: " + ", ".join(args.dates))
         requests_per_second = float(spec.get("requests_per_second", 1.0))
         workers = max(1, int(spec.get("parallel_workers", 1)))
         max_in_flight = max(workers, int(spec.get("max_in_flight", workers * 4)))
@@ -86,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
             base_url=credential("ONEMAP_BASE_URL") or "https://www.onemap.gov.sg",
             access_token=access_token,
         )
-        collect_onemap(rows, config, observation_connection, client)
+        collect_onemap(rows, run_config, observation_connection, client)
         return 0
     except (ConfigError, ProviderError, ValueError) as exc:
         print(str(exc), file=sys.stderr)

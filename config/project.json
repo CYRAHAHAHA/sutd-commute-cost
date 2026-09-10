@@ -45,8 +45,8 @@
       "num_itineraries": 1,
       "requests_per_second": 4.0,
       "max_attempts": 5,
-      "parallel_workers": 8,
-      "max_in_flight": 32,
+      "parallel_workers": 4,
+      "max_in_flight": 8,
       "origin_grouping": {
         "enabled": true,
         "source": "ura_private_residential",
