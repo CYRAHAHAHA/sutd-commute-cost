@@ -178,6 +178,12 @@ def collect_onemap(
                 stats["success"] += 1
             except Exception as exc:
                 provider_error = exc if isinstance(exc, ProviderError) else ProviderError(str(exc))
+                if provider_error.error_code == "AUTHENTICATION_FAILED":
+                    logger(
+                        "ONEMAP authentication failed; stopping without marking the remaining jobs as failed. "
+                        "Refresh ONEMAP_ACCESS_TOKEN and resume the collector."
+                    )
+                    raise provider_error
                 save_failure(connection, job, config, attempts or int(spec.get("max_attempts", 5)), provider_error)
                 stats["failed"] += 1
             completed = stats["success"] + stats["failed"] + stats["skipped"]

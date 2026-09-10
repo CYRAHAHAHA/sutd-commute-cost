@@ -63,7 +63,7 @@ ONEMAP_EMAIL=...
 ONEMAP_PASSWORD=...
 ```
 
-The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git.
+The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git. The full production route workload is multi-week, so token-only operation requires refreshing the token and rerunning the same resumable command; the collector stops safely on authentication failure rather than mass-marking remaining jobs as failed.
 
 ## Address discovery
 

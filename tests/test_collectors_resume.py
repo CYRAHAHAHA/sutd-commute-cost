@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import pytest
+
+from commute.collector import ProviderError
 from commute.db import init_observations_db
 from commute.providers.google import MatrixResult
 from commute.runners import collect_google, collect_onemap
@@ -23,6 +26,11 @@ class FakeOneMap:
         return 720
 
 
+class ExpiredOneMap:
+    def route(self, *args, **kwargs):
+        raise ProviderError("token expired", http_status=401, error_code="AUTHENTICATION_FAILED")
+
+
 def test_google_collector_skips_success_on_resume(test_config, tmp_path):
     rows = [{"postal_code": "200640", "latitude": 1.3, "longitude": 103.85}]
     connection = init_observations_db(tmp_path / "obs.sqlite")
@@ -40,3 +48,11 @@ def test_onemap_collector_persists_a_success(test_config, tmp_path):
     stats = collect_onemap(rows, test_config, connection, client, sleep=lambda _: None)
     assert stats["success"] == 1
     assert connection.execute("select duration_seconds from commute_observation").fetchone()[0] == 720
+
+
+def test_onemap_authentication_failure_stops_without_mass_failure_rows(test_config, tmp_path):
+    rows = [{"postal_code": "200640", "latitude": 1.3, "longitude": 103.85}]
+    connection = init_observations_db(tmp_path / "obs.sqlite")
+    with pytest.raises(ProviderError, match="token expired"):
+        collect_onemap(rows, test_config, connection, ExpiredOneMap(), sleep=lambda _: None)
+    assert connection.execute("select count(*) from commute_observation").fetchone()[0] == 0

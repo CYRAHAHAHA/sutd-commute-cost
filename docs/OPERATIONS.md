@@ -66,6 +66,8 @@ Address discovery/import is not included in the route estimates. Importing a rev
 
 For the completed HDB+URA production population, the eventual OneMap route collection is `94,334 × 70 = 6,603,380` route calls, or 19 days 2 hours 34 minutes at four requests per second before latency, retries, and failures. This is an explicit multi-week operation; the repository does not start it as a side effect of address import or website build. Do not launch it without confirming that the OneMap quota, token lifetime/refresh plan, machine uptime, and fixed-date collection window are acceptable.
 
+OneMap access tokens are normally valid for three days. A token-only `.env` therefore cannot sustain this multi-week run by itself. Before the first experiment date and whenever the token expires, replace `ONEMAP_ACCESS_TOKEN` and rerun the same collector command; successful observations are skipped and only missing jobs are attempted. The collector now stops immediately on authentication failure without converting the remaining jobs into terminal `FAILED` rows. Email/password refresh is supported when the account flow permits it, but do not assume it is unattended if an email confirmation code is required.
+
 ## Resuming
 
 Collectors generate the same deterministic job keys every time. A `SUCCESS` row is skipped. A failed row is eligible to run again, and each new result is persisted immediately. The database uses a unique constraint to make retries idempotent.
