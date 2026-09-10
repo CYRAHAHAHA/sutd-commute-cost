@@ -77,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         expected = expected_samples(run_config, "ONEMAP")
         route_calls = len(rows) * expected
-        print(f"ONEMAP workload: {len(rows):,} residential origins × {expected} = {route_calls:,} route calls")
+        print(f"ONEMAP workload: {len(rows):,} residential origins x {expected} = {route_calls:,} route calls")
         spec = run_config["providers"]["ONEMAP"]
         if args.dates:
             print("ONEMAP dates: " + ", ".join(args.dates))
@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> int:
             preflight_size = max(1, int(spec.get("preflight_sample_size", 30)))
             preflight_rows = evenly_spaced_sample(rows, preflight_size)
             print(
-                f"ONEMAP preflight: {len(preflight_rows):,} distributed origins × {len(spec['times'])} times; "
+                f"ONEMAP preflight: {len(preflight_rows):,} distributed origins x {len(spec['times'])} times; "
                 "persisting results before the full run"
             )
             preflight_stats = collect_onemap(preflight_rows, run_config, observation_connection, client)

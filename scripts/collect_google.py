@@ -76,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
             f"excluded within {settings.exclusion_radius_km:g} km: {population_counts['excluded']:,}; "
             f"eligible: {population_counts['eligible']:,}; selected: {population_counts['selected']:,}"
         )
-        print(f"GOOGLE workload: {len(selected):,} sampled origins × {expected} = {estimated:,} route elements")
+        print(f"GOOGLE workload: {len(selected):,} sampled origins x {expected} = {estimated:,} route elements")
         print(
             f"Estimated matrix HTTP requests at configured batch size: "
             f"{estimate_google_requests(len(selected), config):,}"
