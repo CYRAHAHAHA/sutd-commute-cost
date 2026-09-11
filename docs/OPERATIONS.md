@@ -42,7 +42,7 @@ uv run python -m scripts.collect_onemap --limit 1
 
 The Google command makes 9 route elements across the configured three dates and arrival times (normally 9 matrix requests for one origin); OneMap makes 9 calls for one routed origin across three dates and three departure times. Inspect the persisted rows and provider statuses before starting the full runs. Do not treat a successful dry run alone as evidence that nationwide collection can proceed.
 
-OneMap may only return future public-transport routes inside a short rolling date window. Keep the fixed dates in `config/project.json`, and collect them separately as they become available:
+OneMap may validate a future date while still lacking a public-transport timetable for that date. Keep the fixed dates in `config/project.json`, and collect them separately only after a small date-scoped preflight confirms an actual transit leg:
 
 ```powershell
 uv run python -m scripts.collect_onemap --all --date 2026-09-14
@@ -50,7 +50,7 @@ uv run python -m scripts.collect_onemap --all --date 2026-09-16
 uv run python -m scripts.collect_onemap --all --date 2026-09-18
 ```
 
-The `--date` option only narrows the run to dates already configured for OneMap. It does not substitute dates. Successful rows are skipped on later runs; failed or missing rows remain eligible for retry.
+The `--date` option only narrows the run to dates already configured for OneMap. It does not substitute dates. A route response containing only `WALK` legs is recorded as `NO_TRANSIT_ROUTE`, not as a long successful commute. Successful rows are skipped on later runs; failed or missing rows remain eligible for retry.
 
 After each date-scoped run, audit the persisted rows before proceeding:
 
@@ -67,7 +67,7 @@ Let `N` be the number of default-eligible residential origins (`VERIFIED` and `L
 At the current configured pacing of four OneMap requests per second (240/minute, below the documented 300 calls/minute tokenized-API ceiling):
 
 - OneMap requires `9 × R` route calls in the adopted three-day/three-time configuration, where `R` is the routed-origin count after private-development grouping and landed-home exclusion. The current address database has `R = 16,585`, so the full workload is `149,265` route calls and the pacing-only lower bound is about 10 hours 23 minutes at four calls per second. The collector uses 16 workers, 32 in-flight jobs, and a single shared limiter at four requests per second to overlap normal request latency without multiplying provider traffic. Use the date-scoped option when the provider's rolling date window prevents all configured dates from being queried in one run.
-- A full OneMap run automatically performs a distributed preflight over 30 origins before the full workload. It refuses to continue when more than 20% of those observations fail, which catches date-specific service-window problems before tens of thousands of calls are spent. Review the failures and use `--skip-preflight` only when deliberately accepting that risk.
+- A full OneMap run automatically performs a distributed preflight over 30 origins before the full workload. It refuses to continue when more than 20% of those observations fail, which catches date-specific timetable problems before tens of thousands of calls are spent. It also rejects walking-only responses, which prevents the API's walking fallback from becoming fake public-transport data. Review the failures and use `--skip-preflight` only when deliberately accepting that risk.
 - Google requires `9 × S` route elements and `9 × ceil(S / 90)` matrix HTTP requests. At the default maximum `S = 1,000`, that is 9,000 elements and 108 matrix requests, or approximately 1 minute 48 seconds of pacing time before network latency and retries.
 
 Illustrative OneMap pacing-only bounds are:
@@ -86,7 +86,7 @@ The live Google smoke tests used 18 ledger events. Therefore, after the HDB popu
 
 Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured four requests per second, 10,796 current HDB candidates require a pacing-only lower bound of about 45 minutes. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is imported locally from URA and does not consume OneMap geocoding calls.
 
-For the HDB+URA production population, the adopted OneMap route collection is `16,585 × 9 = 149,265` route calls. Its pacing floor is 10 hours 23 minutes at four calls per second, before retries. The repository does not start it as a side effect of address import or website build. Run the dry run immediately before launch, use date-scoped runs when necessary, and keep the fixed-date collection window available for the full operation.
+For the HDB+URA production population, the adopted OneMap route collection is `16,585 × 9 = 149,265` route calls. Its pacing floor is 10 hours 23 minutes at four calls per second, before retries. The repository does not start it as a side effect of address import or website build. Run the dry run immediately before launch, use date-scoped runs when necessary, and keep the fixed-date collection window available for the full operation. Do not force a future date through `--skip-preflight` merely because the endpoint accepts its calendar value; that can store a large number of `NO_TRANSIT_ROUTE` observations and will not create timetable data that OneMap has not published yet.
 
 OneMap access tokens are normally valid for three days. A fresh token covers the pacing floor for this reduced workload, but refresh it immediately before launch. The currently loaded token expires before the first experiment date and must be replaced before launch. If authentication fails, replace `ONEMAP_ACCESS_TOKEN` and rerun the same collector command; successful observations are skipped and only missing jobs are attempted. The collector stops immediately on authentication failure without converting the remaining jobs into terminal `FAILED` rows. Email/password refresh is supported when the account flow permits it, but do not assume it is unattended if an email confirmation code is required.
 

@@ -6,7 +6,7 @@ import httpx
 
 from commute.collector import ProviderError, call_with_retries
 from commute.providers.google import GoogleRoutesClient, parse_duration
-from commute.providers.onemap import OneMapClient, parse_total_time, token_expiry
+from commute.providers.onemap import OneMapClient, has_transit_leg, parse_total_time, token_expiry
 from commute.retry import retry_decision
 
 
@@ -52,6 +52,43 @@ def test_provider_duration_parsers():
     assert parse_duration("bad") is None
     assert parse_total_time({"route_summary": {"total_time": 987}}) == 987
     assert parse_total_time({"plan": [{"duration": 321}]}) == 321
+
+
+def test_onemap_rejects_walking_only_public_transport_itinerary():
+    walking_only = {
+        "plan": {
+            "itineraries": [
+                {"duration": 1200, "legs": [{"mode": "WALK", "duration": 1200}]},
+            ]
+        }
+    }
+    transit = {
+        "plan": {
+            "itineraries": [
+                {
+                    "duration": 900,
+                    "legs": [{"mode": "WALK"}, {"mode": "SUBWAY"}, {"mode": "WALK"}],
+                }
+            ]
+        }
+    }
+    assert has_transit_leg(walking_only) is False
+    assert has_transit_leg(transit) is True
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=walking_only)
+
+    client = OneMapClient(
+        access_token="existing-token",
+        client=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    try:
+        client.route((1.3, 103.8), (1.34, 103.96), "2026-09-16", "06:30")
+    except ProviderError as exc:
+        assert exc.error_code == "NO_TRANSIT_ROUTE"
+        assert not exc.decision.retryable
+    else:
+        raise AssertionError("walking-only OneMap itinerary was accepted")
 
 
 def test_google_matrix_client_uses_arrival_time_and_parses_elements():

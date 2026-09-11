@@ -65,7 +65,7 @@ ONEMAP_PASSWORD=...
 
 The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git. The current classified production route workload is 149,265 calls for 16,585 routed origins: a pacing-only floor of about 10 hours 23 minutes at the configured 4 requests/second. The collector uses 16 workers and 32 in-flight jobs behind one shared limiter; a live benchmark completed at roughly 3.5 jobs/second, projecting about 12 hours before retries. A fresh token is still required; the collector stops safely on authentication failure rather than mass-marking remaining jobs as failed.
 
-Full OneMap runs begin with a deterministic 30-origin distributed preflight and refuse to continue when its failure rate exceeds the configured 20% limit. This protects the collection from OneMap date-window behavior such as a future service date returning `ROUTE_NOT_FOUND` for a geographically clustered set of otherwise valid origins. Use `--skip-preflight` only after reviewing the preflight output.
+Full OneMap runs begin with a deterministic 30-origin distributed preflight and refuse to continue when its failure rate exceeds the configured 20% limit. OneMap's public API accepts a future date parameter, but the public-transport timetable is not necessarily loaded for every future date. In a live check on 2026-09-11, 2026-09-14 returned transit itineraries while tested origins on 2026-09-15 and later returned either `ROUTE_NOT_FOUND` or walking-only itineraries. This is date- and origin-dependent provider state, not a reason to substitute dates. The collector now rejects a walking-only response as `NO_TRANSIT_ROUTE`; it never treats that walking duration as a public-transport success. Use `--skip-preflight` only after reviewing the date-scoped output.
 
 Before OneMap collection, classify the named private developments. This keeps HDB blocks individual, collapses named condo/EC postal points to a medoid postcode, and excludes landed homes from scheduled mapping:
 
@@ -132,14 +132,14 @@ uv run python -m scripts.collect_google --postal-code 200640
 
 # Full runs. OneMap covers HDB plus grouped non-landed/EC development representatives; the current
 # production address database contains 16,585 routed origins, which is 149,265 calls
-# across the three configured OneMap dates. OneMap dates may need to be run separately
-# because the routing API exposes only a short rolling future-date window.
+# across the three configured OneMap dates. Run each date-scoped workload only when
+# OneMap has a transit timetable for that date.
 # Google selects at most 1,000.
 uv run python -m scripts.collect_onemap --all
 uv run python -m scripts.collect_google --all --confirm-large-run
 
-# Date-scoped OneMap collection when a configured date is inside that rolling window.
-# Repeat for 2026-09-16 and 2026-09-18 later; these are not substitute dates.
+# Date-scoped OneMap collection. Run the later dates after a preflight confirms that
+# OneMap is returning an actual transit leg for them; these are not substitute dates.
 uv run python -m scripts.collect_onemap --all --date 2026-09-14
 
 # Audit persisted rows after each date; add --require-complete for the final gate
@@ -153,7 +153,7 @@ uv run python -m scripts.collect_google --all --limit 999 --confirm-large-run
 uv run python -m scripts.collect_google --all --confirm-large-run --override-budget
 ```
 
-Google prints the full population, radius exclusions, eligible count, selected count, planned route elements, matrix HTTP requests, and current budget usage before starting. Successful and terminally failed observations are written immediately to SQLite. Restarting skips existing successes; failed rows can be retried. Ctrl+C is handled without discarding completed work. OneMap has the same resumability, and `--date` narrows collection to already-configured dates without changing the experiment definition.
+Google prints the full population, radius exclusions, eligible count, selected count, planned route elements, matrix HTTP requests, and current budget usage before starting. Successful and terminally failed observations are written immediately to SQLite. Restarting skips existing successes; failed rows can be retried. Ctrl+C is handled without discarding completed work. OneMap has the same resumability, and `--date` narrows collection to already-configured dates without changing the experiment definition. A successful OneMap response must contain at least one transit leg; a walking-only response is persisted as a failed/missing observation.
 
 ## Build summaries and site
 

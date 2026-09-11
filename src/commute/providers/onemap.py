@@ -11,6 +11,8 @@ import httpx
 
 from ..collector import ProviderError
 
+TRANSIT_LEG_MODES = {"BUS", "FERRY", "RAIL", "SUBWAY", "TRAIN", "TRAM"}
+
 
 def parse_total_time(payload: Any) -> int | None:
     """Read OneMap's route_summary.total_time, tolerating minor response-shape variations."""
@@ -30,6 +32,37 @@ def parse_total_time(payload: Any) -> int | None:
             if found is not None:
                 return found
     return None
+
+
+def has_transit_leg(payload: Any) -> bool | None:
+    """Return whether a OneMap PT itinerary contains an actual transit leg.
+
+    OneMap can return a walking-only itinerary for a ``routeType=pt`` request
+    when it has no usable public-transport schedule for the requested date.
+    That duration must not be reported as a public-transport commute.  ``None``
+    means the response shape does not expose an itinerary (kept for small
+    mocked responses and backwards-compatible parsing).
+    """
+    if not isinstance(payload, dict):
+        return None
+    plan = payload.get("plan")
+    if not isinstance(plan, dict):
+        return None
+    itineraries = plan.get("itineraries")
+    if not isinstance(itineraries, list):
+        return None
+    if not itineraries:
+        return False
+    for itinerary in itineraries:
+        if not isinstance(itinerary, dict):
+            continue
+        legs = itinerary.get("legs")
+        if not isinstance(legs, list):
+            continue
+        for leg in legs:
+            if isinstance(leg, dict) and str(leg.get("mode", "")).upper() in TRANSIT_LEG_MODES:
+                return True
+    return False
 
 
 def token_expiry(token: str) -> float:
@@ -180,6 +213,12 @@ class OneMapClient:
                 "numItineraries": num_itineraries,
             },
         )
+        if has_transit_leg(payload) is False:
+            raise ProviderError(
+                "OneMap returned a walking-only itinerary for a public-transport request",
+                error_code="NO_TRANSIT_ROUTE",
+                retryable=False,
+            )
         duration = parse_total_time(payload)
         if duration is None:
             raise ProviderError("OneMap response did not contain a route duration", error_code="NO_DURATION")
