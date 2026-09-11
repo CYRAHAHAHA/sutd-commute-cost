@@ -12,13 +12,13 @@ The repository is fully implemented and tested, with a three-row residential fix
 
 The experiment definition is version-controlled in `config/project.json`.
 
-- OneMap is the coverage layer for HDB and named private non-landed developments: public transport, **leave at** 06:30, 06:45, and 07:00 on Monday/Wednesday/Friday of the first experiment week (14, 16, and 18 September 2026). That is 9 expected observations per routed origin. Named condo/EC postal points share one deterministic development representative; landed homes remain in the address index but are excluded from scheduled mapping.
+- OneMap is the coverage layer for HDB and named private non-landed developments: public transport, **leave at** 06:30, 06:45, and 07:00 on Monday 14 September 2026. That is 3 expected observations per routed origin. Named condo/EC postal points share one deterministic development representative; landed homes remain in the address index but are excluded from scheduled mapping.
 - Google Maps is the validation layer: public transit, **arrive by** 07:30, 07:45, and 08:00 on the first experiment week's Monday/Wednesday/Friday (14, 16, and 18 September 2026). That is 9 expected observations per sampled postcode.
 - The Google 9-observation design intentionally uses the first week's Monday/Wednesday/Friday; changing the configured Google date list automatically changes expected observations and budget calculations.
 - The collector uses the normal Google Routes API service (`routes.googleapis.com`) and `ComputeRouteMatrix`, not Routes Preferred API. Google’s current reference supports `travelMode=TRANSIT` with `arrivalTime`; the implementation sends one fixed coordinate destination, a required response field mask, and batches conservatively below the 100-element transit limit.
 - Residential origins within the configurable 3.5 km straight-line SUTD radius remain in the dataset but are marked `google_exclusion_reason=within_3.5km_of_sutd` and excluded from Google validation.
 - Google samples up to 1,000 remaining origins using reproducible proportional geographic strata and a fixed seed: 1,000 × 9 = 9,000 planned billable events. The production dataset gate requires at least 999 selected validation origins, so a 9-event smoke test cannot be mistaken for the final sample. A hard budget guard blocks additional Google events beyond the configured 9,000 unless `--override-budget` is explicit. Google currently lists a 10,000-event free usage cap for Compute Routes Essentials and Compute Route Matrix Essentials; verify the [current pricing page](https://developers.google.com/maps/billing-and-pricing/pricing) before each monthly run.
-- Provider averages use successful durations only. A provider needs at least 8 / 9 successful samples for both Google and OneMap. The combined estimate is `(Google mean + OneMap mean) / 2`, and is produced only when both provider estimates meet the threshold. A grouped condo postcode transparently inherits the observations of its named development representative; it is not an independently routed point.
+- Provider averages use successful durations only. Google needs at least 8 / 9 successful samples; OneMap needs at least 2 / 3. The combined estimate is `(Google mean + OneMap mean) / 2`, and is produced only when both provider estimates meet their thresholds. A grouped condo postcode transparently inherits the observations of its named development representative; it is not an independently routed point.
 
 These are intentionally different experiments. Google and OneMap use different routing systems and different time-query capabilities; the site shows both estimates instead of hiding disagreement.
 
@@ -63,7 +63,7 @@ ONEMAP_EMAIL=...
 ONEMAP_PASSWORD=...
 ```
 
-The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git. The current classified production route workload is 149,265 calls for 16,585 routed origins: a pacing-only floor of about 10 hours 23 minutes at the configured 4 requests/second. The collector uses 16 workers and 32 in-flight jobs behind one shared limiter; a live benchmark completed at roughly 3.5 jobs/second, projecting about 12 hours before retries. A fresh token is still required; the collector stops safely on authentication failure rather than mass-marking remaining jobs as failed.
+The Google key is used only by local Python code. For OneMap, an existing `ONEMAP_ACCESS_TOKEN` is sufficient and takes priority. Email/password remain supported for automatic token acquisition/refresh, but are optional when a current token is supplied. OneMap's official authentication endpoint returns a token valid for three days; `.env` is ignored by Git. The current classified production route workload is 49,755 calls for 16,585 routed origins: a pacing-only floor of about 3 hours 28 minutes at the configured 4 requests/second. The collector uses 16 workers and 32 in-flight jobs behind one shared limiter; a fresh token is still required, and the collector stops safely on authentication failure rather than mass-marking remaining jobs as failed.
 
 Full OneMap runs begin with a deterministic 30-origin distributed preflight and refuse to continue when its failure rate exceeds the configured 20% limit. OneMap's public API accepts a future date parameter, but the public-transport timetable is not necessarily loaded for every future date. In a live check on 2026-09-11, 2026-09-14 returned transit itineraries while tested origins on 2026-09-15 and later returned either `ROUTE_NOT_FOUND` or walking-only itineraries. This is date- and origin-dependent provider state, not a reason to substitute dates. The collector now rejects a walking-only response as `NO_TRANSIT_ROUTE`; it never treats that walking duration as a public-transport success. Use `--skip-preflight` only after reviewing the date-scoped output.
 
@@ -115,7 +115,7 @@ The URA adapter covers landed, non-landed, and executive-condominium points, ded
 
 ## Safe collection commands
 
-The repository refuses an unscoped collection. For OneMap, `--limit` caps routed origins after grouping/exclusion. For Google, `--limit` caps the reproducibly selected validation sample; the full eligible population is still used to allocate geographic strata. OneMap has 9 jobs per routed origin; Google has 9.
+The repository refuses an unscoped collection. For OneMap, `--limit` caps routed origins after grouping/exclusion. For Google, `--limit` caps the reproducibly selected validation sample; the full eligible population is still used to allocate geographic strata. OneMap has 3 jobs per routed origin for the single configured Monday; Google retains 9 validation observations per selected origin.
 
 ```powershell
 # Show workload; no API calls
@@ -131,15 +131,13 @@ uv run python -m scripts.collect_onemap --postal-code 200640
 uv run python -m scripts.collect_google --postal-code 200640
 
 # Full runs. OneMap covers HDB plus grouped non-landed/EC development representatives; the current
-# production address database contains 16,585 routed origins, which is 149,265 calls
-# across the three configured OneMap dates. Run each date-scoped workload only when
-# OneMap has a transit timetable for that date.
+# production address database contains 16,585 routed origins, which is 49,755 calls
+# for the configured Monday date and three departure times.
 # Google selects at most 1,000.
 uv run python -m scripts.collect_onemap --all
 uv run python -m scripts.collect_google --all --confirm-large-run
 
-# Date-scoped OneMap collection. Run the later dates after a preflight confirms that
-# OneMap is returning an actual transit leg for them; these are not substitute dates.
+# Explicit date-scoped equivalent for the configured Monday workload.
 uv run python -m scripts.collect_onemap --all --date 2026-09-14
 
 # Audit persisted rows after each date; add --require-complete for the final gate

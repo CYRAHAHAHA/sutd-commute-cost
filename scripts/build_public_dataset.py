@@ -157,6 +157,13 @@ def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[
         )
     summary = build_summary(config)
     sampling = google_sampling_settings(config)
+    collection_dates = sorted(
+        {
+            service_date
+            for spec in config["providers"].values()
+            for service_date in spec.get("dates", config["experiment"]["dates"])
+        }
+    )
     website_data.mkdir(parents=True, exist_ok=True)
     public_path = website_data / "commute-summary.json"
     public_path.write_text(json.dumps(compact_summary(summary), separators=(",", ":")) + "\n", encoding="utf-8")
@@ -164,7 +171,7 @@ def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[
         "dataset_version": config.get("dataset_version"),
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "timezone": config["timezone"],
-        "collection_dates": config["experiment"]["dates"],
+        "collection_dates": collection_dates,
         "destination": config["destination"],
         "minimum_successful_samples": {
             provider: minimum_successful_samples(config, provider) for provider in ("GOOGLE", "ONEMAP")

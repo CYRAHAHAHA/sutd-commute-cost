@@ -14,15 +14,15 @@ All local times use `Asia/Singapore` (UTC+08:00). The source of truth is `config
 
 ## OneMap coverage layer
 
-OneMap uses the public transport routing endpoint with `routeType=pt`, `mode=TRANSIT`, `maxWalkDistance=1000`, and one itinerary. The production coverage sample uses these dates and departure times:
+OneMap uses the public transport routing endpoint with `routeType=pt`, `mode=TRANSIT`, `maxWalkDistance=1000`, and one itinerary. The production coverage sample uses this date and these departure times:
 
-`2026-09-14, 2026-09-16, 2026-09-18 × 06:30, 06:45, 07:00`
+`2026-09-14 × 06:30, 06:45, 07:00`
 
-This is a deliberate reduced temporal sample: Monday, Wednesday, and Friday with three representative departures spanning the original 06:20–06:50 window. It preserves every eligible residential postcode while keeping the complete OneMap workload substantially smaller than the original 70-observation design. It is not silently presented as the original 70-observation design; the provider-specific sampling definition is generated into the public methodology artifact.
+This is a deliberate reduced temporal sample: one Monday with three representative departures spanning the original 06:20–06:50 window. It preserves every eligible residential postcode while reducing the OneMap workload to three observations per routed origin. It is not silently presented as the original 70-observation design; the provider-specific sampling definition is generated into the public methodology artifact. Google remains a separate validation layer with its own three-date, three-arrival-time sample.
 
 OneMap expects dates as `MM-DD-YYYY` and times as `HH:MM:SS`. Its `route_summary.total_time` is stored as seconds.
 
-The official routing contract validates a future date parameter, but it does not guarantee that the public-transport timetable for every future date is already available. Empirically, on 2026-09-11, the endpoint returned a normal transit itinerary through 2026-09-14; for tested origins on 2026-09-15 and later it returned either `ROUTE_NOT_FOUND` or a walking-only itinerary. The exact failure mode varies by origin because the route graph can fall back to walking for some coordinates and return 404 for others. The collector therefore requires a transit leg in the response, treats walking-only responses as `NO_TRANSIT_ROUTE`, and supports `--date` so each fixed date can be collected when its timetable is available. This is an operational scheduling constraint only: the configured experiment dates remain fixed, and no replacement dates may be silently inserted. A date that is not currently returned by OneMap remains pending and is not interpreted as a zero-minute route.
+The official routing contract validates a future date parameter, but it does not guarantee that the public-transport timetable for every future date is already available. Empirically, on 2026-09-11, the endpoint returned a normal transit itinerary for the configured 2026-09-14 date; tested later dates returned either `ROUTE_NOT_FOUND` or walking-only itineraries. The collector therefore requires a transit leg in the response and treats walking-only responses as `NO_TRANSIT_ROUTE`. The production experiment intentionally does not substitute those later dates: its OneMap date is fixed to 2026-09-14.
 
 OneMap runs across every default-eligible HDB origin and every available named private non-landed/EC development representative. Private landed homes are retained as residential index records but excluded from scheduled mapping because one representative point for an estate or street would not be a defensible route origin. Named non-landed/EC developments are grouped by URA `PROJ_NAME`; the representative is the existing postcode point nearest the development's geographic medoid. Every member postcode remains searchable and inherits the representative's result with an explicit `REPRESENTATIVE` observation mode. Unnamed non-landed/EC points remain individual origins.
 
@@ -56,7 +56,7 @@ The Google budget guard counts attempted matrix elements from a persisted SQLite
 
 Every expected job has a unique key: `(postal_code, provider, service_date, query_time)`. A successful provider mean is the arithmetic mean of successful `duration_seconds` values only. Failures are missing observations, never zero-minute values. The summary also records median, min, max, standard deviation, p10, p90, successful count, and expected count.
 
-The default minimum is 8 / 9 for both Google and OneMap. Below its threshold, a provider is marked `INSUFFICIENT_DATA` and its mean is not eligible for the combined estimate. Google-excluded rows are marked `EXCLUDED`. Combined is exactly:
+The default minimum is 8 / 9 for Google and 2 / 3 for OneMap. Below its provider-specific threshold, a provider is marked `INSUFFICIENT_DATA` and its mean is not eligible for the combined estimate. Google-excluded rows are marked `EXCLUDED`. Combined is exactly:
 
 `(Google mean seconds + OneMap mean seconds) / 2`
 
