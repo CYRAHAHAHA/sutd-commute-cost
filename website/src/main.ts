@@ -81,6 +81,12 @@ document.documentElement.classList.add("dark-theme");
 const dataUrl = (name: string) => new URL(`data/${name}`, document.baseURI).toString();
 const liveRouteEndpoint = import.meta.env.VITE_LIVE_ROUTE_ENDPOINT?.trim() || null;
 
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register(new URL("./sw.js", document.baseURI), { scope: "./" }).catch(() => undefined);
+  });
+}
+
 const minutes = (seconds: number | null): string => seconds === null ? "—" : `${Math.round(seconds / 60)} min`;
 const wholeMinutes = (seconds: number | null): string => seconds === null ? "" : String(Math.round(seconds / 60));
 const escapeHtml = (value: string): string => value.replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character] ?? character);

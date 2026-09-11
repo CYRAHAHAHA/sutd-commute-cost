@@ -1,0 +1,21 @@
+{
+  "name": "SUTD Commute Lookup",
+  "short_name": "SUTD commute",
+  "description": "Check weekday-morning public-transport commute estimates to SUTD.",
+  "lang": "en-SG",
+  "start_url": "./?theme=dark",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#071512",
+  "theme_color": "#071512",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
