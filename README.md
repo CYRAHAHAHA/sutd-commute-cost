@@ -144,10 +144,8 @@ uv run python -m scripts.collect_onemap --all --date 2026-09-14
 uv run python -m scripts.audit_observations --provider ONEMAP
 uv run python -m scripts.audit_observations --provider ONEMAP --require-complete
 
-# After the existing 18-event local Google smoke tests, stay under the configured 9,000-event guard:
-uv run python -m scripts.collect_google --all --limit 999 --confirm-large-run
-
-# Only with an explicit decision to exceed the configured 9,000-event guard
+# The completed 999-origin production sample required the explicit override because
+# the 18 smoke-test events plus retries exceeded the conservative 9,000-event guard.
 uv run python -m scripts.collect_google --all --confirm-large-run --override-budget
 ```
 
@@ -181,7 +179,7 @@ npm run build
 
 Unit tests mock provider HTTP responses. Real provider calls are intentionally separate from the normal test suite; use the scoped collection commands above for explicit integration checks after configuring credentials.
 
-The Google dry run is non-billable and does not confirm live credentials. Against the current scheduled-routing population it reports 16,585 origins, 1,235 origins excluded within 3.5 km of SUTD, 15,350 eligible origins, 999 selected origins, 8,991 planned elements, 108 matrix requests, and 9 previously used ledger events. The 999-origin command fits the configured 9,000-event guard; the default 1,000-origin run is still blocked because of the 9 smoke-test events already in the ledger.
+The Google dry run is non-billable and does not confirm live credentials. Against the current scheduled-routing population it reports 16,585 origins, 1,235 origins excluded within 3.5 km of SUTD, 15,350 eligible origins, 999 selected origins, 8,991 planned elements, and 108 matrix requests. The completed run used 9,999 ledger events after retries, remaining below Google's listed 10,000-event free allowance; do not make additional Google calls until the monthly allowance resets or billing is explicitly reviewed.
 
 ## GitHub Pages
 
