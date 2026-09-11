@@ -42,6 +42,9 @@ main { width: min(1260px, 100%); height: 100dvh; margin: 0 auto; padding: 22px c
 .eyebrow, .card-kicker, .result-kicker { color: #ae563d; font-size: 11px; line-height: 1.2; letter-spacing: .11em; text-transform: uppercase; }
 .story h1 { max-width: 540px; margin: 17px 0 18px; color: var(--ink); font-family: 'Space Grotesk', ui-sans-serif, sans-serif; font-size: clamp(2.7rem, 5.5vw, 4.9rem); font-weight: 600; letter-spacing: -.075em; line-height: .97; }
 .lede { max-width: 480px; margin: 0; color: #c7d6ca; font-size: clamp(1rem, 1.5vw, 1.25rem); line-height: 1.45; }
+.privacy-note { display: flex; align-items: flex-start; gap: 9px; max-width: 470px; margin-top: 20px; padding: 10px 12px; border: 1px solid #315345; border-radius: 11px; color: #c8d8cc; background: rgba(16, 35, 30, .72); font-size: 11px; line-height: 1.45; }
+.privacy-note strong { color: var(--lime); font-weight: 700; }
+.privacy-mark { flex: 0 0 auto; color: var(--coral); font-size: 12px; line-height: 1.45; }
 .story-footnote { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 28px; color: var(--muted); font-family: 'DM Mono', ui-monospace, monospace; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
 .story-footnote span { padding: 7px 9px; border: 1px solid var(--line); border-radius: 999px; }
 

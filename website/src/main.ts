@@ -277,6 +277,7 @@ function render(summary: Summary, methodology: Methodology): void {
           <div class="eyebrow">SUTD commute lookup</div>
           <h1>One postcode, or a whole column.</h1>
           <p class="lede">Check a weekday-morning commute in seconds. Paste only postal codes; nothing else leaves this browser.</p>
+          <div class="privacy-note" role="note"><span class="privacy-mark">✦</span><span><strong>Private by design.</strong> Nothing is stored. No account or personal details needed—postal codes only.</span></div>
           <div class="story-footnote"><span>up to 2,000 rows</span><span>spreadsheet-ready</span><span>no live routing</span></div>
         </div>
         <section class="lookup-card" aria-labelledby="lookup-title">
@@ -292,7 +293,7 @@ function render(summary: Summary, methodology: Methodology): void {
             <textarea id="batch-input" rows="7" spellcheck="false" placeholder="050032\n670501\n162009" aria-describedby="batch-help"></textarea>
             <div class="batch-guidance"><span>Example</span><code>050032 · 670501 · 162009</code><span>up to 2,000 rows</span></div>
             <div class="panel-actions"><button id="process-batch" class="primary-action" type="button">Check this column <span>→</span></button><button id="clear-batch" class="secondary-action" type="button">Clear</button></div>
-            <p id="batch-help" class="form-message">Results stay in this browser and can be copied straight into a sheet.</p>
+            <p id="batch-help" class="form-message">Nothing is stored. Results stay in this browser and can be copied straight into a sheet.</p>
             <div id="batch-results" class="batch-results" hidden>
               <div class="batch-result-topline"><div id="batch-summary" class="batch-summary" aria-live="polite"></div><button id="copy-output" class="copy-button" type="button">Copy results for spreadsheet</button></div>
               <div class="batch-secondary-actions"><button id="copy-full" class="inline-button" type="button">Copy complete table including postal codes</button></div>
@@ -365,7 +366,7 @@ function render(summary: Summary, methodology: Methodology): void {
     batchRows = [];
     batchResults.hidden = true;
     document.querySelector("main")?.classList.remove("batch-active");
-    batchMessage.textContent = "Results stay in this browser and can be copied straight into a sheet.";
+    batchMessage.textContent = "Nothing is stored. Results stay in this browser and can be copied straight into a sheet.";
     batchMessage.className = "form-message";
     batchInput.focus();
   });
