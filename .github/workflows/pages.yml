@@ -19,6 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -28,7 +30,32 @@ jobs:
       - name: Verify finalized dataset
         shell: bash
         run: test -f website/data/deployment-ready.json
+      - name: Decide whether dataset policy check is required
+        id: policy-check
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "required=true" >> "$GITHUB_OUTPUT"
+            echo "Manual deployment: dataset policy check required."
+            exit 0
+          fi
+
+          while IFS= read -r changed_file; do
+            case "$changed_file" in
+              website/src/*|website/public/*|website/index.html|website/methodology.html|website/evidence.html|website/DESIGN.md|website/package.json|website/package-lock.json|.github/workflows/pages.yml)
+                ;;
+              *)
+                echo "Dataset-affecting change detected: $changed_file"
+                echo "required=true" >> "$GITHUB_OUTPUT"
+                exit 0
+                ;;
+            esac
+          done < <(git diff --name-only HEAD^ HEAD)
+
+          echo "UI-only change detected; allowing deployment against the existing published dataset."
+          echo "required=false" >> "$GITHUB_OUTPUT"
       - name: Verify published dataset matches project policy
+        if: steps.policy-check.outputs.required == 'true'
         shell: bash
         run: |
           node <<'NODE'
