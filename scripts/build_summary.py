@@ -18,6 +18,20 @@ def build_summary(config: dict) -> dict:
     address_connection = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
     observation_connection = init_observations_db(resolve_path(config, config["observations_database"]))
     addresses = list(iter_addresses(address_connection, config["addresses"]["include_confidence"]))
+    grouping_enabled = bool(config["providers"]["ONEMAP"].get("origin_grouping", {}).get("enabled", False))
+    if not grouping_enabled:
+        # Do not let legacy grouping columns make an incomplete direct-postal
+        # collection look complete by inheriting an old representative result.
+        addresses = [
+            {
+                **dict(address),
+                "onemap_group_key": None,
+                "onemap_group_representative": None,
+                "onemap_group_size": None,
+                "onemap_group_method": None,
+            }
+            for address in addresses
+        ]
     configured_keys = {
         (provider, service_date, query_time)
         for provider, spec in config["providers"].items()
@@ -40,7 +54,12 @@ def build_summary(config: dict) -> dict:
     for address in addresses:
         postal_code = address["postal_code"]
         representative = address["onemap_group_representative"]
-        if representative and representative != postal_code and not direct_by_postal.get(postal_code):
+        if (
+            grouping_enabled
+            and representative
+            and representative != postal_code
+            and not direct_by_postal.get(postal_code)
+        ):
             for observation in direct_by_postal.get(representative, []):
                 cloned = dict(observation)
                 cloned["postal_code"] = postal_code

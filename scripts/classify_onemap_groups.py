@@ -15,7 +15,7 @@ from commute.routing_groups import representative_for_group
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
-        description="Classify named URA condo/EC developments into one deterministic OneMap route point."
+        description="Apply the versioned OneMap postal-resolution policy to the residential address database."
     )
     result.add_argument(
         "--geojson",
@@ -53,10 +53,54 @@ def main(argv: list[str] | None = None) -> int:
     try:
         config = load_config()
         grouping = config["providers"]["ONEMAP"].get("origin_grouping", {})
-        if not grouping.get("enabled"):
-            raise ConfigError("OneMap origin grouping is disabled in config/project.json")
-        groups = _project_members(args.geojson, set(grouping.get("residential_types", [])))
+        excluded_types = set(grouping.get("excluded_residential_types", []))
         connection = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
+
+        total_rows = connection.execute(
+            "SELECT COUNT(*) FROM residential_address WHERE confidence IN ('VERIFIED','LIKELY')"
+        ).fetchone()[0]
+        excluded_rows = connection.execute(
+            "SELECT COUNT(*) FROM residential_address WHERE confidence IN ('VERIFIED','LIKELY') "
+            "AND residential_type IN ({})".format(",".join("?" for _ in excluded_types)),
+            tuple(excluded_types),
+        ).fetchone()[0] if excluded_types else 0
+        route_origins = total_rows - excluded_rows
+
+        if grouping.get("mode", "DIRECT_POSTAL") == "DIRECT_POSTAL" or not grouping.get("enabled", False):
+            expected = route_origins * expected_samples(config, "ONEMAP")
+            print(
+                f"OneMap policy: DIRECT_POSTAL; scheduled-mapping exclusions: {excluded_rows:,}; "
+                f"route origins: {route_origins:,}; "
+                f"OneMap observations at current config: {expected:,}"
+            )
+            if args.dry_run:
+                return 0
+
+            connection.execute(
+                """
+                UPDATE residential_address
+                SET onemap_group_key=NULL, onemap_group_representative=NULL,
+                    onemap_group_size=NULL, onemap_group_method=NULL,
+                    onemap_exclusion_reason=NULL
+                """
+            )
+            if excluded_types:
+                placeholders = ",".join("?" for _ in excluded_types)
+                connection.execute(
+                    f"UPDATE residential_address SET onemap_exclusion_reason=? "
+                    f"WHERE residential_type IN ({placeholders})",
+                    (grouping["excluded_reason"], *excluded_types),
+                )
+            connection.commit()
+            print(
+                f"Applied DIRECT_POSTAL policy: {route_origins:,} route origins; "
+                f"retained {excluded_rows:,} excluded records for postcode lookup."
+            )
+            return 0
+
+        if not grouping.get("enabled"):
+            raise ConfigError("OneMap origin grouping is disabled without DIRECT_POSTAL mode")
+        groups = _project_members(args.geojson, set(grouping.get("residential_types", [])))
         all_rows = {
             row["postal_code"]: row
             for row in connection.execute(
@@ -70,15 +114,6 @@ def main(argv: list[str] | None = None) -> int:
                 classified.append((project, members))
         grouped_postcodes = sum(len(members) for _, members in classified)
         representatives = len(classified)
-        total_rows = connection.execute(
-            "SELECT COUNT(*) FROM residential_address WHERE confidence IN ('VERIFIED','LIKELY')"
-        ).fetchone()[0]
-        excluded_types = set(grouping.get("excluded_residential_types", []))
-        excluded_rows = connection.execute(
-            "SELECT COUNT(*) FROM residential_address WHERE confidence IN ('VERIFIED','LIKELY') "
-            "AND residential_type IN ({})".format(",".join("?" for _ in excluded_types)),
-            tuple(excluded_types),
-        ).fetchone()[0] if excluded_types else 0
         route_origins = total_rows - excluded_rows - grouped_postcodes + representatives
         print(
             f"URA named condo/EC members: {grouped_postcodes:,}; developments: {representatives:,}; "

@@ -1,5 +1,5 @@
 {
-  "dataset_version": "2026.09.11-onemap-3-samples-grouped",
+  "dataset_version": "2026.09.12-onemap-3-samples-direct",
   "timezone": "Asia/Singapore",
   "destination": {
     "name": "Singapore University of Technology and Design",
@@ -50,10 +50,11 @@
       "preflight_sample_size": 30,
       "preflight_max_failure_rate": 0.2,
       "origin_grouping": {
-        "enabled": true,
+        "enabled": false,
+        "mode": "DIRECT_POSTAL",
         "source": "ura_private_residential",
-        "residential_types": ["PRIVATE_NON_LANDED", "EXECUTIVE_CONDOMINIUM"],
-        "method": "URA_PROJECT_NAME_MEDOID",
+        "residential_types": [],
+        "method": "DIRECT_POSTAL",
         "excluded_residential_types": ["PRIVATE_LANDED"],
         "excluded_reason": "landed_home_excluded_from_scheduled_mapping"
       }

@@ -4,6 +4,7 @@ import pytest
 
 from commute.collector import jobs_for_provider
 from commute.config import ConfigError, destination, query_datetimes
+from commute.db import init_addresses_db, iter_onemap_origins
 
 
 def test_fixed_experiment_has_ten_weekdays():
@@ -94,3 +95,43 @@ def test_invalid_destination_coordinate_is_rejected(test_config):
     test_config["destination"]["latitude"] = 91
     with pytest.raises(ConfigError, match="latitude"):
         destination(test_config, require_coordinates=True)
+
+
+def test_onemap_origins_route_each_non_landed_postal_directly(tmp_path):
+    connection = init_addresses_db(tmp_path / "addresses.sqlite")
+    rows = [
+        ("100001", "HDB", None, None),
+        ("100002", "EXECUTIVE_CONDOMINIUM", "100001", None),
+        ("100003", "PRIVATE_NON_LANDED", "100001", None),
+        ("100004", "PRIVATE_LANDED", None, "landed_home_excluded_from_scheduled_mapping"),
+    ]
+    for postal_code, residential_type, representative, exclusion in rows:
+        connection.execute(
+            """
+            INSERT INTO residential_address
+              (postal_code, address, latitude, longitude, residential_type, source,
+               source_identifier, confidence, discovered_at, onemap_group_representative,
+               onemap_exclusion_reason)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                postal_code,
+                postal_code,
+                1.3,
+                103.8,
+                residential_type,
+                "test",
+                postal_code,
+                "VERIFIED",
+                "2026-09-12T00:00:00Z",
+                representative,
+                exclusion,
+            ),
+        )
+    connection.commit()
+
+    origins = list(iter_onemap_origins(connection))
+
+    assert [row["postal_code"] for row in origins] == ["100001", "100002", "100003"]
+    assert [row["postal_code"] for row in iter_onemap_origins(connection, postal_code="100002")] == ["100002"]
+    assert list(iter_onemap_origins(connection, postal_code="100004")) == []

@@ -260,7 +260,13 @@ def iter_onemap_origins(
     limit: int | None = None,
     postal_code: str | None = None,
 ) -> Iterator[sqlite3.Row]:
-    """Yield physical origins to route, collapsing only classified OneMap groups."""
+    """Yield every eligible non-landed postal origin exactly once.
+
+    Group metadata is retained in the schema for historical datasets, but the
+    current production policy is direct-postal routing. Ignoring stale group
+    metadata here prevents an old classification from silently reducing a new
+    collection's spatial resolution.
+    """
     allowed = tuple(include_confidence)
     if not allowed:
         return
@@ -273,20 +279,15 @@ def iter_onemap_origins(
         ).fetchone()
         if row is None:
             return
-        if row["onemap_exclusion_reason"]:
+        if row["onemap_exclusion_reason"] or row["residential_type"] == "PRIVATE_LANDED":
             return
-        representative = row["onemap_group_representative"] or row["postal_code"]
-        representative_row = connection.execute(
-            "SELECT * FROM residential_address WHERE postal_code=?", (representative,)
-        ).fetchone()
-        if representative_row is not None:
-            yield representative_row
+        yield row
         return
     query = (
         "SELECT * FROM residential_address "
         f"WHERE confidence IN ({placeholders}) "
         "AND onemap_exclusion_reason IS NULL "
-        "AND (onemap_group_representative IS NULL OR postal_code=onemap_group_representative) "
+        "AND residential_type <> 'PRIVATE_LANDED' "
         "ORDER BY postal_code"
     )
     if limit is not None:
