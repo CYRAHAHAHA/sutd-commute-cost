@@ -32,6 +32,12 @@ jobs:
         working-directory: website
       - run: npm run build
         working-directory: website
+      - name: Verify static dataset is in the Pages artifact
+        shell: bash
+        run: |
+          test -s website/dist/data/commute-summary.json
+          test -s website/dist/data/methodology.json
+          test -s website/dist/data/deployment-ready.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website/dist
