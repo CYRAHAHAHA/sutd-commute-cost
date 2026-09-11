@@ -63,8 +63,6 @@ const dataUrl = (name: string) => new URL(`data/${name}`, document.baseURI).toSt
 const liveRouteEndpoint = import.meta.env.VITE_LIVE_ROUTE_ENDPOINT?.trim() || null;
 
 const minutes = (seconds: number | null): string => seconds === null ? "—" : `${Math.round(seconds / 60)} min`;
-const detailMinutes = (seconds: number | null): string => seconds === null ? "—" : `${(seconds / 60).toFixed(1)} min`;
-const formatDate = (value: string) => new Intl.DateTimeFormat("en-SG", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Singapore" }).format(new Date(`${value}T00:00:00+08:00`));
 
 function decodeProvider(row: CompactSummary["postcodes"][number][3]): ProviderSummary {
   const [status, mean, median, min, max, successful_samples, expected_samples] = row;
@@ -108,60 +106,6 @@ function decodeSummary(compact: CompactSummary): Summary {
   };
 }
 
-function providerCopy(name: string, methodology: Methodology): string {
-  const spec = methodology.providers[name];
-  const label = name === "GOOGLE" ? "Google Maps" : "OneMap";
-  const verb = name === "GOOGLE" ? "Arrive by" : "Leave home at";
-  return `
-    <div class="method-block">
-      <div class="method-title"><h3>${label}</h3><span>${name === "GOOGLE" ? "validation" : "coverage"}</span></div>
-      <p><strong>${verb} ${spec.times[0]}–${spec.times.at(-1)}</strong> Singapore time, across ${spec.dates.length} weekday${spec.dates.length === 1 ? "" : "s"}. That is ${spec.expected_samples} expected reading${spec.expected_samples === 1 ? "" : "s"} per postcode.</p>
-    </div>`;
-}
-
-function selectedMethodology(record: PostcodeSummary, methodology: Methodology): string {
-  const google = record.google;
-  const onemap = record.onemap;
-  const combined = record.combined;
-  const googleNote = record.google_exclusion_reason === "within_3.5km_of_sutd"
-    ? "Google validation is intentionally excluded inside the configured SUTD radius."
-    : `${google.successful_samples} / ${google.expected_samples} Google readings succeeded.`;
-  const oneMapNote = record.onemap_exclusion_reason
-    ? "This retained landed-home record is outside scheduled OneMap coverage."
-    : `${onemap.successful_samples} / ${onemap.expected_samples} OneMap readings succeeded.`;
-  return `
-    <div class="selected-method">
-      <div class="selected-method-heading"><span>For ${record.postal_code}</span><span>${record.onemap_observation_mode === "REPRESENTATIVE" ? "development representative" : "mapped point"}</span></div>
-      <div class="selected-stats">
-        <div><span>Google mean</span><strong>${detailMinutes(google.mean_seconds)}</strong><small>${googleNote}</small></div>
-        <div><span>OneMap mean</span><strong>${detailMinutes(onemap.mean_seconds)}</strong><small>${oneMapNote}</small></div>
-        <div><span>Combined</span><strong>${detailMinutes(combined.mean_seconds)}</strong><small>${combined.status === "SUCCESS" ? "equal-weight provider mean" : `needs ${methodology.minimum_successful_samples.GOOGLE}/${google.expected_samples} Google and ${methodology.minimum_successful_samples.ONEMAP}/${onemap.expected_samples} OneMap readings`}</small></div>
-      </div>
-    </div>`;
-}
-
-function renderMethodology(methodology: Methodology): string {
-  const google = methodology.providers.GOOGLE;
-  const onemap = methodology.providers.ONEMAP;
-  return `
-    <dialog id="methodology-dialog" class="methodology-dialog" aria-labelledby="methodology-title">
-      <div class="dialog-card">
-        <div class="dialog-header">
-          <div><div class="eyebrow">The small print, made useful</div><h2 id="methodology-title">How the number earns its keep.</h2></div>
-          <button id="close-methodology" class="icon-button" type="button" aria-label="Close methodology">×</button>
-        </div>
-        <p class="dialog-intro">This is a static lookup. The browser does not call Google or OneMap, and nothing you type is sent anywhere.</p>
-        <div id="selected-methodology"><p class="dialog-muted">Choose a postcode to see its provider breakdown here.</p></div>
-        <div class="method-grid">
-          ${providerCopy("GOOGLE", methodology)}
-          ${providerCopy("ONEMAP", methodology)}
-        </div>
-        <div class="method-block formula-block"><div class="method-title"><h3>Combined</h3><span>50 / 50</span></div><p><strong>(Google mean + OneMap mean) / 2.</strong> They use different routing systems and different time-query semantics, so disagreement is shown—not quietly averaged away.</p></div>
-        <div class="method-footer">${formatDate(google.dates[0])} · ${formatDate(google.dates.at(-1)!)} Google validation · ${formatDate(onemap.dates[0])} OneMap coverage · dataset ${methodology.dataset_version}</div>
-      </div>
-    </dialog>`;
-}
-
 function renderResult(record: PostcodeSummary, methodology: Methodology): string {
   const hasCombined = record.combined.status === "SUCCESS" && record.combined.mean_seconds !== null;
   const hasOneMap = record.onemap.status === "SUCCESS" && record.onemap.mean_seconds !== null;
@@ -183,9 +127,8 @@ function renderResult(record: PostcodeSummary, methodology: Methodology): string
         <div class="metric"><span>Google Maps</span><strong>${minutes(record.google.mean_seconds)}</strong><small>${record.google.successful_samples}/${record.google.expected_samples} successful</small></div>
         <div class="metric metric-accent"><span>Combined</span><strong>${minutes(record.combined.mean_seconds)}</strong><small>equal-weight mean</small></div>
       </div>
-      ${primarySeconds !== null ? `<p class="extrapolation">≈ ${oneWay! * 2} minutes there-and-back on a school day <span>· ≈ ${((oneWay! * 2 * 5) / 60).toFixed(1)} h over five days</span></p>` : `<p class="warning">${coverageWarning}</p>`}
+      ${primarySeconds !== null ? `<p class="extrapolation">≈ ${oneWay} minutes one way <span>· provider mean for the configured weekday-morning sample</span></p>` : `<p class="warning">${coverageWarning}</p>`}
       ${record.onemap_observation_mode === "REPRESENTATIVE" ? `<p class="result-note">Named development representative: ${record.onemap_group_representative} · ${record.onemap_group_size} mapped postal points share this route.</p>` : ""}
-      <button class="recipe-button open-methodology" type="button">How did you get that? <span>↗</span></button>
     </section>`;
 }
 
@@ -196,7 +139,7 @@ function render(summary: Summary, methodology: Methodology): void {
     <main>
       <header class="topbar">
         <div class="brand"><span class="brand-dot"></span><span>SUTD commute cost</span></div>
-        <button id="open-methodology" class="methodology-button" type="button">How this works <span>↗</span></button>
+        <a class="methodology-button" href="./methodology.html">How this works <span>↗</span></a>
       </header>
       <section class="workspace">
         <div class="story">
@@ -219,25 +162,12 @@ function render(summary: Summary, methodology: Methodology): void {
         </section>
       </section>
       <footer><span>What does not staying in SUTD hostel cost you?</span><span>Dataset ${summary.dataset_version}</span></footer>
-    </main>
-    ${renderMethodology(methodology)}`;
+    </main>`;
 
   const form = document.querySelector<HTMLFormElement>("#lookup-form")!;
   const input = document.querySelector<HTMLInputElement>("#postal-code")!;
   const message = document.querySelector<HTMLParagraphElement>("#form-message")!;
   const result = document.querySelector<HTMLDivElement>("#result")!;
-  const dialog = document.querySelector<HTMLDialogElement>("#methodology-dialog")!;
-  const selectedMethod = document.querySelector<HTMLDivElement>("#selected-methodology")!;
-
-  const openMethodology = (record?: PostcodeSummary) => {
-    selectedMethod.innerHTML = record ? selectedMethodology(record, methodology) : `<p class="dialog-muted">Choose a postcode to see its provider breakdown here.</p>`;
-    if (typeof dialog.showModal === "function") dialog.showModal();
-    else dialog.setAttribute("open", "");
-  };
-
-  document.querySelector<HTMLButtonElement>("#open-methodology")!.addEventListener("click", () => openMethodology());
-  document.querySelector<HTMLButtonElement>("#close-methodology")!.addEventListener("click", () => dialog.close());
-  dialog.addEventListener("click", (event) => { if (event.target === dialog) dialog.close(); });
   document.querySelector<HTMLButtonElement>("#sample-postcode")!.addEventListener("click", () => {
     input.value = "050032";
     input.focus();
@@ -277,7 +207,6 @@ function render(summary: Summary, methodology: Methodology): void {
     message.textContent = liveRouteEndpoint && needsLiveLookup ? "Live estimate returned." : "Found. No judgement about the journey length.";
     message.className = "form-message success";
     result.innerHTML = renderResult(record, methodology);
-    document.querySelector<HTMLButtonElement>(".open-methodology")!.addEventListener("click", () => openMethodology(record));
   });
 }
 

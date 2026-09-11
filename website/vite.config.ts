@@ -41,4 +41,12 @@ export default defineConfig({
   // Relative assets work both at a GitHub Pages repository subpath and at /.
   base: "./",
   plugins: [generatedDataPlugin()],
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(websiteRoot, "index.html"),
+        methodology: resolve(websiteRoot, "methodology.html"),
+      },
+    },
+  },
 });

@@ -6,11 +6,11 @@ Help a prospective SUTD student answer one practical question quickly: “What w
 
 ## Visual rules
 
-- Calm paper background with deep green ink, a lime result accent, and a small coral action accent.
+- High-contrast dark green background with near-white ink, a lime result accent, and a small coral action accent.
 - One viewport, one primary action: enter a six-digit postcode and get the estimate.
 - Keep the title useful and modest. The number and the lookup action have the strongest hierarchy.
 - Use short labels, compact metadata, and plain-language states. Cheeky copy is allowed when it does not blur the methodology.
-- Keep methodology available through a modal so transparency does not turn the main task into a scroll marathon.
+- Keep the calculator single-screen; send detailed methodology to a dedicated reading page so transparency does not turn the main task into a scroll marathon.
 - Preserve visible focus rings, labelled fields, keyboard-usable buttons, and clear invalid/missing-data states.
 
 ## Component vocabulary
@@ -25,4 +25,5 @@ Help a prospective SUTD student answer one practical question quickly: “What w
 
 - The document uses a fixed viewport layout with `overflow: hidden`; the methodology dialog may scroll internally on small screens.
 - Results replace the empty state in the same card; they do not navigate or auto-scroll the user.
+- The displayed duration is one way only. Do not multiply it by two or imply that a return journey was measured.
 - The browser never calls a paid provider in the default static build.
