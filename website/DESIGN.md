@@ -24,7 +24,7 @@ Help a prospective SUTD student answer one practical question quickly: “What w
 
 ## Interaction constraints
 
-- The document uses a fixed viewport layout with `overflow: hidden`; the methodology dialog may scroll internally on small screens.
+- The desktop calculator uses a fixed viewport layout with `overflow: hidden`; below 820px it switches to a stacked, naturally scrollable layout so the form and results remain readable on phones. Methodology and evidence pages are scrollable reading views at every size.
 - Results replace the empty state in the same card; they do not navigate or auto-scroll the user.
 - The displayed duration is one way only. Do not multiply it by two or imply that a return journey was measured.
 - The browser never calls a paid provider in the default static build.
