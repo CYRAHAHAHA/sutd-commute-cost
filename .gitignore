@@ -18,3 +18,4 @@ data/raw/
 data/input/
 exports/
 *.log
+data/summary.json
