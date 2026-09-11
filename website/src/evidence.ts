@@ -26,6 +26,30 @@ const formatDate = (value: string) => new Intl.DateTimeFormat("en-SG", { day: "n
 const formatDuration = (seconds: number | null) => seconds === null ? "—" : `${Math.floor(seconds / 60)} min ${seconds % 60} sec`;
 const formatCollectedAt = (value: string | null) => value ? new Intl.DateTimeFormat("en-SG", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Singapore" }).format(new Date(value)) : "—";
 
+function providerLinks(postalCode: string, record: EvidenceRecord, evidence: Evidence): string {
+  if (!record.origin || evidence.destination.latitude === null || evidence.destination.longitude === null) return "";
+  const origin = `${record.origin[0]},${record.origin[1]}`;
+  const destination = `${evidence.destination.latitude},${evidence.destination.longitude}`;
+  const oneMapParams = new URLSearchParams({
+    from: origin,
+    fromname: `Postal code ${postalCode}`,
+    to: destination,
+    toname: evidence.destination.name.toUpperCase(),
+  });
+  const googleParams = new URLSearchParams({
+    api: "1",
+    origin,
+    destination,
+    travelmode: "transit",
+  });
+  return `
+    <div class="provider-links">
+      <div><span>OneMap</span><a href="https://www.onemap.gov.sg/routing?${oneMapParams.toString()}" target="_blank" rel="noopener noreferrer">Open this route planner ↗</a></div>
+      <div><span>Google Maps</span><a href="https://www.google.com/maps/dir/?${googleParams.toString()}" target="_blank" rel="noopener noreferrer">Open Transit planner ↗</a></div>
+    </div>
+    <p class="provider-link-note">Both links use the same origin and SUTD destination coordinates as this dataset. Provider websites may recalculate with current timetable data; the table above is the historical record we collected.</p>`;
+}
+
 function emptyState(title: string, detail: string): string {
   return `<main class="failure-screen"><section class="failure-card"><div class="eyebrow">Evidence unavailable</div><h1>${title}</h1><p>${detail}</p><a class="methodology-button" href="./">← Back to lookup</a></section></main>`;
 }
@@ -63,6 +87,7 @@ function render(postalCode: string, evidence: Evidence): void {
         <div class="evidence-panel-heading"><div><div class="section-label">Recorded route durations</div><h2>OneMap readings</h2></div><span class="dataset-tag">${evidence.dataset_version}</span></div>
         ${isRepresentative ? `<div class="callout"><strong>Development representative point</strong><span>This postcode inherits the persisted observations for representative postcode ${record.source_postal_code}. The same measured point is used for ${record.group_size ?? "the named development"} mapped postal points.</span></div>` : ""}
         ${record.origin ? `<p class="route-meta">Origin point used: <span class="mono">${record.origin[0]}, ${record.origin[1]}</span> · Destination: <span class="mono">${evidence.destination.latitude}, ${evidence.destination.longitude}</span></p>` : ""}
+        ${providerLinks(postalCode, record, evidence)}
         <div class="evidence-table-wrap"><table><thead><tr><th>Service date</th><th>Leave home</th><th>OneMap total</th><th>Status</th><th>Attempts</th><th>Collected</th></tr></thead><tbody>${observationRows}</tbody></table></div>
         <p class="evidence-footnote">OneMap returns a total journey duration for the requested public-transport route. This project stores and shows that duration; it does not currently retain the provider’s individual bus/train legs, stop sequence, or raw response payload.</p>
       </section>

@@ -64,7 +64,7 @@ It is not an average of all raw observations and is calculated only when both pr
 
 ## Publication choice
 
-The public dataset contains postcode summaries, Google inclusion/exclusion metadata, methodology metadata, and a compact OneMap duration-evidence index. Every result links to a postcode-specific evidence page showing the persisted OneMap service date, departure time, total duration, status, attempts, and collection timestamp used for that coverage estimate. It does not publish raw provider response payloads or individual bus/train leg geometry; the local SQLite database remains the full audit store, and `scripts.export_csv` supports controlled exports.
+The public dataset contains postcode summaries, Google inclusion/exclusion metadata, methodology metadata, and a compact OneMap duration-evidence index. Every result links to a postcode-specific evidence page showing the persisted OneMap service date, departure time, total duration, status, attempts, and collection timestamp used for that coverage estimate. The evidence page also links to the OneMap and Google Maps route planners using the same stored origin and fixed SUTD destination coordinates. Those external pages may recalculate current timetable data; they are a way to inspect the queried locations, not a replay guarantee for the historical sample. The public dataset does not publish raw provider response payloads or individual bus/train leg geometry; the local SQLite database remains the full audit store, and `scripts.export_csv` supports controlled exports.
 
 The displayed duration is one way only. Return journeys were not collected, so the site does not multiply a morning estimate by two or present a round-trip daily total.
 
