@@ -27,6 +27,7 @@ type DeploymentReady = {
 };
 
 const app = document.querySelector<HTMLDivElement>("#methodology-app")!;
+document.documentElement.classList.add("dark-theme");
 document.documentElement.classList.add("methodology-document");
 const dataUrl = (name: string) => new URL(`data/${name}`, document.baseURI).toString();
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-SG", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Singapore" }).format(new Date(`${value}T00:00:00+08:00`));
@@ -64,7 +65,7 @@ function render(methodology: Methodology, deployment: DeploymentReady): void {
   const googleCoverage = deployment.coverage.GOOGLE;
   app.innerHTML = `
     <main class="methodology-page">
-      <header class="topbar"><a class="brand" href="./"><span class="brand-dot"></span><span>SUTD commute cost</span></a><a class="methodology-button" href="./">← Back to lookup</a></header>
+      <header class="topbar"><a class="brand" href="./?theme=dark"><span class="brand-dot"></span><span>SUTD commute cost</span></a><a class="methodology-button" href="./?theme=dark">← Back to lookup</a></header>
       <section class="methodology-hero">
         <div class="eyebrow">Methodology · version ${methodology.dataset_version}</div>
         <h1>Every minute has a paper trail.</h1>
@@ -88,7 +89,7 @@ function render(methodology: Methodology, deployment: DeploymentReady): void {
           <div><div class="section-label">Boundaries and safeguards</div><h2>Useful, transparent, a little humble.</h2><p class="section-lede">The route systems disagree sometimes. That is information, not a bug to hide.</p><div class="limit-grid"><div><h3>Resumable</h3><p>Each postcode/date/time/provider job has a unique key. Successful rows are skipped on restart; failures remain visible and retryable.</p></div><div><h3>Auditable</h3><p>Raw observations stay in local SQLite with status, duration, attempts, collection timestamp, and provider metadata.</p></div><div><h3>Budget-aware</h3><p>Google uses a capped stratified validation sample with an explicit request budget. Full runs require an operator confirmation flag.</p></div><div><h3>Licensing-aware</h3><p>The public site publishes derived summaries and the methodology. Raw provider route data remains local unless redistribution is permitted.</p></div></div><div class="detail-table"><div><span>OneMap dataset jobs</span><strong>${number(onemapCoverage.persisted_jobs)} / ${number(onemapCoverage.expected_jobs)} persisted · ${onemapCoverage.missing_jobs} missing</strong></div><div><span>Google validation jobs</span><strong>${number(googleCoverage.persisted_jobs)} / ${number(googleCoverage.expected_jobs)} persisted · ${googleCoverage.missing_jobs} missing</strong></div><div><span>Generated</span><strong>${new Date(deployment.verified_at).toLocaleString("en-SG", { timeZone: "Asia/Singapore" })} Singapore time</strong></div></div></div>
         </section>
       </div>
-      <footer><span>Back to the lookup when you’re ready.</span><a class="methodology-button" href="./">Open calculator ↗</a></footer>
+      <footer><span>Back to the lookup when you’re ready.</span><a class="methodology-button" href="./?theme=dark">Open calculator ↗</a></footer>
     </main>`;
 }
 

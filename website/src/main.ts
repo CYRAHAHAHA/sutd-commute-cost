@@ -59,6 +59,7 @@ type Methodology = {
 };
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
+document.documentElement.classList.add("dark-theme");
 const dataUrl = (name: string) => new URL(`data/${name}`, document.baseURI).toString();
 const liveRouteEndpoint = import.meta.env.VITE_LIVE_ROUTE_ENDPOINT?.trim() || null;
 
@@ -140,7 +141,7 @@ function render(summary: Summary, methodology: Methodology): void {
     <main>
       <header class="topbar">
         <div class="brand"><span class="brand-dot"></span><span>SUTD commute cost</span></div>
-        <a class="methodology-button" href="./methodology.html">How this works <span>↗</span></a>
+        <a class="methodology-button" href="./methodology.html?theme=dark">How this works <span>↗</span></a>
       </header>
       <section class="workspace">
         <div class="story">

@@ -20,6 +20,7 @@ type Evidence = {
 };
 
 const app = document.querySelector<HTMLDivElement>("#evidence-app")!;
+document.documentElement.classList.add("dark-theme");
 document.documentElement.classList.add("methodology-document");
 const dataUrl = (name: string) => new URL(`data/${name}`, document.baseURI).toString();
 const formatDate = (value: string) => new Intl.DateTimeFormat("en-SG", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Singapore" }).format(new Date(`${value}T00:00:00+08:00`));
@@ -51,7 +52,7 @@ function providerLinks(postalCode: string, record: EvidenceRecord, evidence: Evi
 }
 
 function emptyState(title: string, detail: string): string {
-  return `<main class="failure-screen"><section class="failure-card"><div class="eyebrow">Evidence unavailable</div><h1>${title}</h1><p>${detail}</p><a class="methodology-button" href="./">← Back to lookup</a></section></main>`;
+  return `<main class="failure-screen"><section class="failure-card"><div class="eyebrow">Evidence unavailable</div><h1>${title}</h1><p>${detail}</p><a class="methodology-button" href="./?theme=dark">← Back to lookup</a></section></main>`;
 }
 
 function render(postalCode: string, evidence: Evidence): void {
@@ -76,7 +77,7 @@ function render(postalCode: string, evidence: Evidence): void {
 
   app.innerHTML = `
     <main class="evidence-page">
-      <header class="topbar"><a class="brand" href="./"><span class="brand-dot"></span><span>SUTD commute cost</span></a><a class="methodology-button" href="./">← Back to lookup</a></header>
+      <header class="topbar"><a class="brand" href="./?theme=dark"><span class="brand-dot"></span><span>SUTD commute cost</span></a><a class="methodology-button" href="./?theme=dark">← Back to lookup</a></header>
       <section class="evidence-hero">
         <div class="eyebrow">Evidence · OneMap</div>
         <h1>What was actually recorded for <span>${postalCode}</span>?</h1>
@@ -92,7 +93,7 @@ function render(postalCode: string, evidence: Evidence): void {
         <p class="evidence-footnote">OneMap returns a total journey duration for the requested public-transport route. This project stores and shows that duration; it does not currently retain the provider’s individual bus/train legs, stop sequence, or raw response payload.</p>
       </section>
       <section class="evidence-explain"><div class="section-label">How to read this</div><h2>Evidence, without theatre.</h2><p>A successful row is one actual OneMap response persisted by the collector for this postcode/date/time job. Failed rows remain visible as failures and are never treated as zero minutes. The headline OneMap mean uses successful durations only and requires the configured minimum sample count.</p><p>Dataset generated: ${new Intl.DateTimeFormat("en-SG", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Singapore" }).format(new Date(evidence.generated_at))} Singapore time.</p></section>
-      <footer><span>Want the full experiment definition?</span><a class="methodology-button" href="./methodology.html">Read methodology ↗</a></footer>
+      <footer><span>Want the full experiment definition?</span><a class="methodology-button" href="./methodology.html?theme=dark">Read methodology ↗</a></footer>
     </main>`;
 }
 
