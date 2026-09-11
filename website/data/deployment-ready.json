@@ -1,14 +1,14 @@
 {
-  "dataset_version": "2026.09.11-onemap-3-samples-grouped",
-  "verified_at": "2026-09-11T06:14:51.313454Z",
+  "dataset_version": "2026.09.12-onemap-3-samples-direct",
+  "verified_at": "2026-09-11T19:07:20.986653Z",
   "status": "COMPLETE",
   "coverage": {
     "ONEMAP": {
-      "population": 16585,
+      "population": 21295,
       "selection_ready": true,
       "minimum_population": 0,
-      "expected_jobs": 49755,
-      "persisted_jobs": 49755,
+      "expected_jobs": 63885,
+      "persisted_jobs": 63885,
       "missing_jobs": 0
     },
     "GOOGLE": {
