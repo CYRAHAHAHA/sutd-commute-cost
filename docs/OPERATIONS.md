@@ -5,7 +5,7 @@
 1. Set the SUTD coordinate in `config/project.json`.
 2. Copy `.env.example` to `.env` and set provider credentials. `ONEMAP_ACCESS_TOKEN` alone is sufficient for OneMap; email/password are optional refresh credentials.
 3. Import a reviewed residential source CSV, or build the HDB first-layer database with the resumable adapter.
-4. Classify named private developments and mark landed homes out of scheduled routing.
+4. Apply the direct-postal OneMap policy and mark landed homes out of scheduled routing.
 5. Run both providers against `--limit 1` or `--limit 10` and inspect the SQLite rows.
 6. Build the summary and static dataset.
 
@@ -31,7 +31,7 @@ The dry run is intentionally non-billable and does not contact Google:
 uv run python -m scripts.collect_google --limit 10 --dry-run
 ```
 
-With a small fixture this reports the selected origins, planned route elements, matrix requests, and current budget usage without contacting Google. The current scheduled-routing dry run reports 16,585 origins, 15,350 Google-eligible origins after the 3.5 km exclusion, 999 selected origins, 8,991 planned elements, 108 matrix requests, and 9 previously used ledger events. That is a configuration and cost-safety check, not a live API credential check.
+With a small fixture this reports the selected origins, planned route elements, matrix requests, and current budget usage without contacting Google. The current direct-postal dry run reports 21,295 origins, 19,496 Google-eligible origins after the 3.5 km exclusion, 1,000 selected origins, 9,000 planned elements, and 108 matrix requests. The existing ledger contains 9,999 attempted events. That is a configuration and cost-safety check, not a live API credential check; the budget guard will refuse more work until the allowance is reviewed or reset.
 
 After importing the real residential source, run the smallest live checks before a nationwide collection:
 
@@ -64,7 +64,7 @@ Let `N` be the number of default-eligible residential origins (`VERIFIED` and `L
 
 At the current configured pacing of four OneMap requests per second (240/minute, below the documented 300 calls/minute tokenized-API ceiling):
 
-- OneMap requires `3 × R` route calls in the adopted one-date/three-time configuration, where `R` is the routed-origin count after private-development grouping and landed-home exclusion. The current address database has `R = 16,585`, so the full workload is `49,755` route calls and the pacing-only lower bound is about 3 hours 28 minutes at four calls per second. The collector uses 16 workers, 32 in-flight jobs, and a single shared limiter at four requests per second to overlap normal request latency without multiplying provider traffic.
+- OneMap requires `3 × R` route calls in the adopted one-date/three-time configuration, where `R` is the directly routed-origin count after landed-home exclusion. The current address database has `R = 21,295`, so the full workload is `63,885` route calls and the pacing-only lower bound is about 4 hours 26 minutes at four calls per second. The collector uses 16 workers, 32 in-flight jobs, and a single shared limiter at four requests per second to overlap normal request latency without multiplying provider traffic.
 - A full OneMap run automatically performs a distributed preflight over 30 origins before the full workload. It refuses to continue when more than 20% of those observations fail, which catches date-specific timetable problems before tens of thousands of calls are spent. It also rejects walking-only responses, which prevents the API's walking fallback from becoming fake public-transport data. Review the failures and use `--skip-preflight` only when deliberately accepting that risk.
 - Google requires `9 × S` route elements and `9 × ceil(S / 90)` matrix HTTP requests. At the default maximum `S = 1,000`, that is 9,000 elements and 108 matrix requests, or approximately 1 minute 48 seconds of pacing time before network latency and retries.
 
@@ -84,13 +84,13 @@ The live Google smoke tests used 18 ledger events. The completed 999-origin prod
 
 Address discovery/import is not included in the route estimates. Importing a reviewed CSV with coordinates is normally quick. The official HDB adapter performs one OneMap Search per explicit residential HDB property record; at the configured four requests per second, 10,796 current HDB candidates require a pacing-only lower bound of about 45 minutes. Its source-resolution checkpoint is committed per record, so it can be interrupted and resumed safely. Private residential coverage is imported locally from URA and does not consume OneMap geocoding calls.
 
-For the HDB+URA production population, the adopted OneMap route collection is `16,585 × 3 = 49,755` route calls. Its pacing floor is 3 hours 28 minutes at four calls per second, before retries. The repository does not start it as a side effect of address import or website build. Run the dry run immediately before launch and inspect the persisted rows before rebuilding the public dataset. Do not force a future date through `--skip-preflight` merely because the endpoint accepts its calendar value; that can store `NO_TRANSIT_ROUTE` observations and will not create timetable data that OneMap has not published yet.
+For the HDB+URA production population, the adopted OneMap route collection is `21,295 × 3 = 63,885` route calls. Its pacing floor is about 4 hours 26 minutes at four calls per second, before retries. The repository does not start it as a side effect of address import or website build. Run the dry run immediately before launch and inspect the persisted rows before rebuilding the public dataset. Do not force a future date through `--skip-preflight` merely because the endpoint accepts its calendar value; that can store `NO_TRANSIT_ROUTE` observations and will not create timetable data that OneMap has not published yet.
 
 OneMap access tokens are normally valid for three days. A fresh token covers the pacing floor for this reduced workload, but refresh it immediately before launch. The currently loaded token expires before the first experiment date and must be replaced before launch. If authentication fails, replace `ONEMAP_ACCESS_TOKEN` and rerun the same collector command; successful observations are skipped and only missing jobs are attempted. The collector stops immediately on authentication failure without converting the remaining jobs into terminal `FAILED` rows. Email/password refresh is supported when the account flow permits it, but do not assume it is unattended if an email confirmation code is required.
 
 ## Landed and unknown postcode fallback
 
-The address index retains landed-home postcodes, but the scheduled OneMap population excludes them. The default GitHub Pages build displays these as known-but-unmapped. The frontend has an optional build-time hook: copy `website/.env.example` to `website/.env` and set `VITE_LIVE_ROUTE_ENDPOINT` to a server-side proxy that accepts `POST {"postal_code":"123456"}` and returns the complete `PostcodeSummary` JSON shape. Do not put `ONEMAP_ACCESS_TOKEN`, `GOOGLE_MAPS_API_KEY`, or any provider credential in `website/.env`; the proxy, not browser JavaScript, owns credentials and quota controls.
+The address index retains landed-home postcodes, but the scheduled OneMap population excludes them. Every HDB, EC, and private non-landed postcode is routed directly; no representative-development result is reused. The default GitHub Pages build displays landed homes as known-but-unmapped. The frontend has an optional build-time hook: copy `website/.env.example` to `website/.env` and set `VITE_LIVE_ROUTE_ENDPOINT` to a server-side proxy that accepts `POST {"postal_code":"123456"}` and returns the complete `PostcodeSummary` JSON shape. Do not put `ONEMAP_ACCESS_TOKEN`, `GOOGLE_MAPS_API_KEY`, or any provider credential in `website/.env`; the proxy, not browser JavaScript, owns credentials and quota controls.
 
 ## Parallelism and the one-day constraint
 
@@ -98,7 +98,7 @@ The official [OneMap routing endpoint](https://www.onemap.gov.sg/apidocs/routing
 
 For comparison, the original 70-observation design would require 6,603,380 calls. At the documented 300/minute ceiling, the theoretical minimum is about 15.3 days; completing it in 24 hours would require about 4,586 calls/minute. That is why the adopted configuration reduces temporal samples while retaining every origin.
 
-The local feasibility analysis below uses a deterministic greedy representative: every postcode is assigned to a representative within the stated radius, and the representative is routed for all 70 observations. It is an estimate, not yet a production clustering rule, and does not prove that nearby postcodes have identical public-transport routes.
+The local feasibility analysis below is retained as historical context for the original 70-observation design. It is not the production policy: the current direct-postal configuration deliberately removes representative clustering for non-landed homes because nearby origins can still have different walking access and transit choices.
 
 | Representative rule | Representatives after 3.5 km exclusion | Route calls | Minimum at 240/min | Minimum at 300/min |
 | --- | ---: | ---: | ---: | ---: |

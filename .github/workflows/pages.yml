@@ -28,6 +28,22 @@ jobs:
       - name: Verify finalized dataset
         shell: bash
         run: test -f website/data/deployment-ready.json
+      - name: Verify published dataset matches project policy
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('config/project.json', 'utf8'));
+          const methodology = JSON.parse(fs.readFileSync('website/data/methodology.json', 'utf8'));
+          const configured = config.providers.ONEMAP.origin_grouping;
+          const published = methodology.providers.ONEMAP.origin_grouping;
+          if (config.dataset_version !== methodology.dataset_version) {
+            throw new Error(`Dataset version mismatch: config=${config.dataset_version}, published=${methodology.dataset_version}`);
+          }
+          if (!published || configured.enabled !== published.enabled || configured.mode !== published.mode) {
+            throw new Error('Published OneMap resolution policy does not match config/project.json');
+          }
+          NODE
       - run: npm ci
         working-directory: website
       - run: npm run build

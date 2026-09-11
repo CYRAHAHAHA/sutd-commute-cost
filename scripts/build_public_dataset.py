@@ -148,8 +148,8 @@ def onemap_evidence(config: dict, summary: dict) -> dict:
         "notes": [
             "Durations are the total seconds returned by OneMap's public-transport routing response.",
             "The evidence page does not contain provider API credentials or raw response payloads.",
-            "A representative development postcode reuses the same persisted observations "
-            "for its mapped member postcodes.",
+            "Every eligible HDB, EC, and private non-landed postal code is routed directly; "
+            "landed records remain indexed but are excluded from scheduled mapping.",
         ],
         "postcodes": records,
     }
