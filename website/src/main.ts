@@ -129,6 +129,7 @@ function renderResult(record: PostcodeSummary, methodology: Methodology): string
       </div>
       ${primarySeconds !== null ? `<p class="extrapolation">≈ ${oneWay} minutes one way <span>· provider mean for the configured weekday-morning sample</span></p>` : `<p class="warning">${coverageWarning}</p>`}
       ${record.onemap_observation_mode === "REPRESENTATIVE" ? `<p class="result-note">Named development representative: ${record.onemap_group_representative} · ${record.onemap_group_size} mapped postal points share this route.</p>` : ""}
+      <a class="evidence-button" href="./evidence.html?postal_code=${encodeURIComponent(record.postal_code)}">Ask for the evidence <span>↗</span></a>
     </section>`;
 }
 

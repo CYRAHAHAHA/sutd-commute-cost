@@ -19,7 +19,8 @@ Help a prospective SUTD student answer one practical question quickly: “What w
 - `story`: one-sentence context and three trust cues.
 - `lookup-card`: the primary input and result surface.
 - `metric-grid`: OneMap coverage, Google validation, and equal-weight combined estimate.
-- `methodology-dialog`: experiment semantics and selected-postcode evidence.
+- `evidence-page`: the exact persisted OneMap duration observations for a selected postcode.
+- `methodology-page`: the full experiment definition and its boundaries.
 
 ## Interaction constraints
 

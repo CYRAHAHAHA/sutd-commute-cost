@@ -1,6 +1,6 @@
 {
   "dataset_version": "2026.09.11-onemap-3-samples-grouped",
-  "generated_at": "2026-09-11T04:43:31.324331Z",
+  "generated_at": "2026-09-11T06:14:51.313454Z",
   "timezone": "Asia/Singapore",
   "collection_dates": [
     "2026-09-14",
@@ -70,10 +70,10 @@
   "calculation": {
     "provider_mean": "arithmetic mean of successful duration_seconds",
     "combined_mean": "(google_mean_seconds + onemap_mean_seconds) / 2",
-    "round_trip_week": "one_way_mean_minutes \u00d7 2 \u00d7 5"
+    "return_journey": "not measured; no round-trip extrapolation is published"
   },
   "raw_observations": {
-    "browser_view": false,
-    "reason": "The site ships compact summaries; raw rows remain in local SQLite and CSV export scripts."
+    "browser_view": "onemap_duration_evidence",
+    "reason": "The evidence page publishes persisted OneMap duration observations and metadata, but not raw provider response payloads or route-leg geometry."
   }
 }

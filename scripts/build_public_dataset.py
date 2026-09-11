@@ -15,7 +15,7 @@ from commute.config import (
     minimum_successful_samples,
     resolve_path,
 )
-from commute.db import init_addresses_db, init_observations_db, iter_onemap_origins
+from commute.db import init_addresses_db, init_observations_db, iter_observations, iter_onemap_origins
 from commute.runners import jobs_for_provider
 from scripts.build_summary import build_summary
 
@@ -85,6 +85,76 @@ def compact_summary(summary: dict) -> dict:
     }
 
 
+def onemap_evidence(config: dict, summary: dict) -> dict:
+    """Build a compact public evidence index of persisted OneMap observations.
+
+    The collector stores the provider's total route duration, not a complete
+    bus/train leg itinerary. The evidence page therefore exposes the exact
+    persisted observations used by each postcode's OneMap aggregate without
+    pretending to reproduce provider route geometry.
+    """
+    observations_connection = init_observations_db(resolve_path(config, config["observations_database"]))
+    configured_keys = {
+        (service_date, query_time)
+        for service_date in config["providers"]["ONEMAP"].get("dates", config["experiment"]["dates"])
+        for query_time in config["providers"]["ONEMAP"]["times"]
+    }
+    direct: dict[str, list] = {}
+    for row in iter_observations(observations_connection, provider="ONEMAP"):
+        if (row["service_date"], row["query_time"]) in configured_keys:
+            direct.setdefault(row["postal_code"], []).append(row)
+
+    records = {}
+    for postal_code, record in summary["postcodes"].items():
+        source_postal_code = record.get("onemap_group_representative") or postal_code
+        source_rows = direct.get(source_postal_code, [])
+        first = source_rows[0] if source_rows else None
+        records[postal_code] = {
+            "source_postal_code": source_postal_code,
+            "observation_mode": record.get("onemap_observation_mode", "DIRECT"),
+            "group_size": record.get("onemap_group_size"),
+            "origin": [round(float(first["origin_lat"]), 6), round(float(first["origin_lng"]), 6)] if first else None,
+            "observations": [
+                [
+                    row["service_date"],
+                    row["query_time"],
+                    row["duration_seconds"],
+                    row["status"],
+                    row["attempt_count"],
+                    row["collected_at"],
+                    row["error_code"],
+                ]
+                for row in source_rows
+            ],
+        }
+    return {
+        "dataset_version": summary["dataset_version"],
+        "generated_at": summary["generated_at"],
+        "provider": "ONEMAP",
+        "time_semantics": config["providers"]["ONEMAP"]["time_semantics"],
+        "destination": config["destination"],
+        "format": {
+            "postcode_record": ["source_postal_code", "observation_mode", "group_size", "origin", "observations"],
+            "observation_row": [
+                "service_date",
+                "query_time",
+                "duration_seconds",
+                "status",
+                "attempt_count",
+                "collected_at",
+                "error_code",
+            ],
+        },
+        "notes": [
+            "Durations are the total seconds returned by OneMap's public-transport routing response.",
+            "The evidence page does not contain provider API credentials or raw response payloads.",
+            "A representative development postcode reuses the same persisted observations "
+            "for its mapped member postcodes.",
+        ],
+        "postcodes": records,
+    }
+
+
 def collection_completeness(config: dict) -> dict[str, dict[str, int]]:
     """Count expected and persisted job keys for the production populations."""
     addresses = init_addresses_db(resolve_path(config, config["addresses"]["database"]))
@@ -125,7 +195,7 @@ def collection_completeness(config: dict) -> dict[str, dict[str, int]]:
     return result
 
 
-def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[Path, Path]:
+def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[Path, Path, Path]:
     completeness = collection_completeness(config)
     website_data = resolve_path(config, "website/data")
     ready_path = website_data / "deployment-ready.json"
@@ -167,6 +237,10 @@ def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[
     website_data.mkdir(parents=True, exist_ok=True)
     public_path = website_data / "commute-summary.json"
     public_path.write_text(json.dumps(compact_summary(summary), separators=(",", ":")) + "\n", encoding="utf-8")
+    evidence_path = website_data / "onemap-evidence.json"
+    evidence_path.write_text(
+        json.dumps(onemap_evidence(config, summary), separators=(",", ":")) + "\n", encoding="utf-8"
+    )
     methodology = {
         "dataset_version": config.get("dataset_version"),
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -197,11 +271,14 @@ def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[
         "calculation": {
             "provider_mean": "arithmetic mean of successful duration_seconds",
             "combined_mean": "(google_mean_seconds + onemap_mean_seconds) / 2",
-            "round_trip_week": "one_way_mean_minutes × 2 × 5",
+            "return_journey": "not measured; no round-trip extrapolation is published",
         },
         "raw_observations": {
-            "browser_view": False,
-            "reason": "The site ships compact summaries; raw rows remain in local SQLite and CSV export scripts.",
+            "browser_view": "onemap_duration_evidence",
+            "reason": (
+                "The evidence page publishes persisted OneMap duration observations and metadata, "
+                "but not raw provider response payloads or route-leg geometry."
+            ),
         },
     }
     methodology_path = website_data / "methodology.json"
@@ -220,7 +297,7 @@ def build_public_dataset(config: dict, allow_incomplete: bool = False) -> tuple[
             + "\n",
             encoding="utf-8",
         )
-    return public_path, methodology_path
+    return public_path, methodology_path, evidence_path
 
 
 def main() -> int:

@@ -38,7 +38,9 @@ jobs:
         test -s website/dist/data/commute-summary.json
         test -s website/dist/data/methodology.json
         test -s website/dist/data/deployment-ready.json
+        test -s website/dist/data/onemap-evidence.json
         test -s website/dist/methodology.html
+        test -s website/dist/evidence.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website/dist

@@ -46,6 +46,7 @@ export default defineConfig({
       input: {
         main: resolve(websiteRoot, "index.html"),
         methodology: resolve(websiteRoot, "methodology.html"),
+        evidence: resolve(websiteRoot, "evidence.html"),
       },
     },
   },
