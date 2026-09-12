@@ -285,15 +285,17 @@ function render(summary: Summary, methodology: Methodology): void {
             <button id="batch-mode" class="mode-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="batch-panel">Paste a column</button>
             <button id="single-mode" class="mode-tab" type="button" role="tab" aria-selected="false" aria-controls="single-panel">Check one</button>
           </div>
-          <div id="batch-panel" class="lookup-panel" role="tabpanel" aria-labelledby="batch-mode">
-            <div class="card-kicker">For office lists and spreadsheets</div>
-            <h2 id="lookup-title">Paste postal codes</h2>
-            <p class="panel-intro">One six-digit code per line. No names, addresses, or other columns.</p>
-            <label class="sr-only" for="batch-input">Postal-code column</label>
-            <textarea id="batch-input" rows="7" spellcheck="false" placeholder="050032\n670501\n162009" aria-describedby="batch-help"></textarea>
-            <div class="batch-guidance"><span>Example</span><code>050032 · 670501 · 162009</code><span>up to 2,000 rows</span></div>
-            <div class="panel-actions"><button id="process-batch" class="primary-action" type="button">Check this column <span>→</span></button><button id="clear-batch" class="secondary-action" type="button">Clear</button></div>
-            <p id="batch-help" class="form-message">Your input isn’t stored or sent anywhere. Results stay in this browser and can be copied straight into a sheet.</p>
+          <div id="batch-panel" class="lookup-panel batch-panel" role="tabpanel" aria-labelledby="batch-mode">
+            <div class="batch-controls">
+              <div class="card-kicker">For office lists and spreadsheets</div>
+              <h2 id="lookup-title">Paste postal codes</h2>
+              <p class="panel-intro">One six-digit code per line. No names, addresses, or other columns.</p>
+              <label class="sr-only" for="batch-input">Postal-code column</label>
+              <textarea id="batch-input" rows="7" spellcheck="false" placeholder="050032\n670501\n162009" aria-describedby="batch-help"></textarea>
+              <div class="batch-guidance"><span>Example</span><code>050032 · 670501 · 162009</code><span>up to 2,000 rows</span></div>
+              <div class="panel-actions"><button id="process-batch" class="primary-action" type="button">Check this column <span>→</span></button><button id="clear-batch" class="secondary-action" type="button">Clear</button></div>
+              <p id="batch-help" class="form-message">Your input isn’t stored or sent anywhere. Results stay in this browser and can be copied straight into a sheet.</p>
+            </div>
             <div id="batch-results" class="batch-results" hidden>
               <div class="batch-result-topline"><div id="batch-summary" class="batch-summary" aria-live="polite"></div><button id="copy-output" class="copy-button" type="button">Copy results for spreadsheet</button></div>
               <div class="batch-secondary-actions"><button id="copy-full" class="inline-button" type="button">Copy complete table including postal codes</button></div>

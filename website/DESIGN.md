@@ -31,4 +31,5 @@ Help a prospective SUTD student answer one practical question quickly: “What w
 - The displayed duration is one way only. Do not multiply it by two or imply that a return journey was measured.
 - The browser never calls a paid provider in the default static build.
 - Batch processing is client-side only, preserves input order and duplicates, and caps a paste at 2,000 rows. Clipboard output is tab-separated for direct spreadsheet pasting; invalid or unavailable rows stay blank rather than becoming zero-minute results.
+- On desktop, the batch results preview sits beside the paste controls and scrolls inside the card; on phones it stacks below the controls.
 - The landing page is installable as a dark standalone PWA on supported mobile browsers. The app shell can open offline after its first visit; commute data uses network-first refresh so a stale dataset is not silently preferred when connectivity is available.
